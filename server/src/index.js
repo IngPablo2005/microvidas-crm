@@ -3,7 +3,7 @@ import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { initDb } from './db.js';
-import { seed } from './seed.js';
+import { seed, clearBusinessData } from './seed.js';
 
 import authRoutes from './routes/auth.js';
 import clientsRoutes from './routes/clients.js';
@@ -59,6 +59,27 @@ app.get('/api/admin/seed', async (req, res) => {
   try {
     await seed();
     res.json({ ok: true, message: 'Listo. Si no había datos, se cargaron los datos de ejemplo. Si ya había, no se tocó nada.' });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Borra los datos de ejemplo (clientes, ventas, cotizaciones, pipeline, tareas, etc.) para arrancar
+// a cargar datos reales. NO borra usuarios ni configuración, así nadie pierde el acceso.
+// Requiere la misma clave que /api/admin/seed, más una confirmación explícita en la URL.
+// https://<tu-app>.onrender.com/api/admin/reset-data?key=<ADMIN_SEED_KEY>&confirm=BORRAR
+app.get('/api/admin/reset-data', async (req, res) => {
+  if (!process.env.ADMIN_SEED_KEY || req.query.key !== process.env.ADMIN_SEED_KEY) {
+    return res.status(403).json({ error: 'forbidden' });
+  }
+  if (req.query.confirm !== 'BORRAR') {
+    return res.status(400).json({
+      error: 'Falta confirmación. Agregá &confirm=BORRAR al final de la URL para confirmar que querés borrar todos los clientes, ventas, cotizaciones, etc. (los usuarios y la configuración no se tocan).',
+    });
+  }
+  try {
+    await clearBusinessData();
+    res.json({ ok: true, message: 'Datos de ejemplo eliminados. Los usuarios y la configuración se mantuvieron intactos. Ya podés empezar a cargar datos reales.' });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }

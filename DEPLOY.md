@@ -56,6 +56,16 @@ La base de Turso empieza vacía (sin usuarios ni datos de ejemplo), aunque la ap
 
 Esta dirección es segura para dejarla así: sin la clave correcta responde "forbidden", y si ya hay datos cargados no los duplica ni los borra aunque la visites de nuevo por error.
 
+## Borrar los datos de ejemplo para cargar datos reales
+
+Cuando quieras dejar de usar los datos de prueba (los 10 clientes, ventas, cotizaciones, etc. de ejemplo) y empezar a cargar los tuyos, abrí en el navegador (con la misma `ADMIN_SEED_KEY` del paso anterior):
+
+`https://microvidas-crm.onrender.com/api/admin/reset-data?key=LA_CLAVE&confirm=BORRAR`
+
+Esto borra clientes, prospectos, ventas, cotizaciones, pipeline, tareas, calendario, cobranzas y productos de ejemplo. **No borra los usuarios ni la configuración**, así que tu login sigue funcionando igual que antes. Si te olvidás del `&confirm=BORRAR` al final, la página te lo va a recordar en vez de borrar algo por error.
+
+Los usuarios de ejemplo (Lucía Fernández, Martín Gómez, Sofía Ramírez, Consulta Directorio) quedan cargados con la contraseña `microvidas2026`; podés desactivarlos o cambiarles el rol desde Configuración → Usuarios dentro de la app, o dejarlos y renombrarlos para tu equipo real.
+
 ## Cómo se actualiza de ahí en adelante
 
 - **Cuando te haga una mejora en una sesión como esta**, te paso el zip actualizado y hacés los dos clics en GitHub Desktop ("Commit to main" → "Push origin") descriptos en el Paso 3. En cuanto el push llega a GitHub, Render detecta el cambio y redespliega solo — no hay que tocar nada en Render.

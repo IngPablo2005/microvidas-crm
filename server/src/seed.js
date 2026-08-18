@@ -12,6 +12,17 @@ async function clearAll() {
   for (const t of tables) await db.exec(`DELETE FROM ${t}`);
 }
 
+// Borra únicamente los datos comerciales de ejemplo (clientes, prospectos, ventas, cotizaciones,
+// pipeline, tareas, calendario, cobranzas, productos, etc.), sin tocar los usuarios ni la configuración
+// (settings), para no dejar a nadie sin acceso al sistema. Pensado para usarse una sola vez antes de
+// empezar a cargar datos reales.
+async function clearBusinessData() {
+  const tables = ['notifications','payment_commitments','invoices','collections','notes','attachments',
+    'milestones','activities','calendar_events','tasks','sale_items','sales','quote_items','quotes',
+    'pipeline_opportunities','products','prospects','contacts','clients'];
+  for (const t of tables) await db.exec(`DELETE FROM ${t}`);
+}
+
 async function seed() {
   const existing = await db.prepare('SELECT COUNT(*) c FROM clients').get();
   if (existing.c > 0) {
@@ -282,7 +293,7 @@ async function run() {
   console.log(`Seed completo: ${clientIds.length} clientes, ${prospectIds.length} prospectos, ${createdSales.length} ventas.`);
 }
 
-export { clearAll, seed, run };
+export { clearAll, clearBusinessData, seed, run };
 
 // Solo se ejecuta automáticamente cuando este archivo se corre directo como script
 // (ej. "npm run seed"), no cuando otro módulo lo importa (ej. la ruta /api/admin/seed).
