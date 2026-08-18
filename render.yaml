@@ -1,0 +1,21 @@
+# Configuración de despliegue para Render (render.com).
+# Al conectar el repositorio de GitHub en Render y elegir "Blueprint",
+# este archivo configura todo automáticamente: no hace falta llenar
+# formularios a mano. Ver DEPLOY.md para el paso a paso completo.
+services:
+  - type: web
+    name: microvidas-crm
+    runtime: node
+    plan: free
+    buildCommand: cd client && npm install && npm run build && cd ../server && npm install
+    startCommand: cd server && npm run start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: JWT_SECRET
+        generateValue: true
+      - key: TURSO_DATABASE_URL
+        sync: false
+      - key: TURSO_AUTH_TOKEN
+        sync: false

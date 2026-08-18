@@ -1,0 +1,196 @@
+import express from 'express';
+import ExcelJS from 'exceljs';
+import PDFDocument from 'pdfkit';
+import db from '../db.js';
+import { getWeeklySummary } from '../lib/weeklySummary.js';
+
+const router = express.Router();
+
+const fmtMoney = n => `$ ${Number(n || 0).toLocaleString('es-AR', { minimumFractionDigits: 0 })}`;
+
+function renderWeeklyReportPDF(res, summary) {
+  const doc = new PDFDocument({ margin: 36, size: 'A4' });
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="reporte_semanal_${summary.desde}_a_${summary.hasta}.pdf"`);
+  doc.pipe(res);
+
+  doc.fontSize(17).fillColor('#0f172a').text('Reporte semanal comercial', { align: 'center' });
+  doc.fontSize(10).fillColor('#6b7280').text(`Período: ${summary.desde} al ${summary.hasta}`, { align: 'center' });
+  doc.moveDown(1.2);
+
+  const cards = [
+    ['Visitas realizadas', summary.totales.visitas],
+    ['Llamadas realizadas', summary.totales.llamadas],
+    ['Ventas', `${summary.totales.ventas_cantidad} — ${fmtMoney(summary.totales.ventas_total)}`],
+    ['Cobranzas', `${summary.totales.cobranzas_cantidad} — ${fmtMoney(summary.totales.cobranzas_total)}`],
+  ];
+  const cardWidth = (doc.page.width - 72) / 2;
+  cards.forEach(([label, value], i) => {
+    const x = 36 + (i % 2) * cardWidth;
+    const y = doc.y + Math.floor(i / 2) * 52;
+    doc.fontSize(9).fillColor('#6b7280').text(label, x, y);
+    doc.fontSize(14).fillColor('#0f172a').text(String(value), x, y + 13);
+  });
+  doc.y += 52 * Math.ceil(cards.length / 2) + 10;
+  doc.moveDown(1);
+
+  doc.fontSize(12).fillColor('#0f172a').text('Detalle por responsable');
+  doc.moveDown(0.4);
+
+  const headers = ['Responsable', 'Visitas', 'Llamadas', 'Ventas (cant.)', 'Ventas (importe)', 'Cobranzas (cant.)', 'Cobranzas (importe)'];
+  const colWidths = [110, 55, 60, 70, 90, 75, 90];
+  let y = doc.y;
+  doc.fontSize(8).fillColor('#374151');
+  let x = 36;
+  headers.forEach((h, i) => { doc.text(h, x, y, { width: colWidths[i] }); x += colWidths[i]; });
+  y += 14;
+  doc.moveTo(36, y).lineTo(doc.page.width - 36, y).strokeColor('#d1d5db').stroke();
+  y += 5;
+
+  if (!summary.porResponsable.length) {
+    doc.fontSize(9).fillColor('#9ca3af').text('Sin actividad registrada en el período.', 36, y);
+  } else {
+    doc.fontSize(8).fillColor('#111827');
+    for (const r of summary.porResponsable) {
+      if (y > doc.page.height - 60) { doc.addPage(); y = 40; }
+      const row = [r.responsable, String(r.visitas), String(r.llamadas), String(r.ventas_cantidad), fmtMoney(r.ventas_total), String(r.cobranzas_cantidad), fmtMoney(r.cobranzas_total)];
+      x = 36;
+      row.forEach((v, i) => { doc.text(v, x, y, { width: colWidths[i] }); x += colWidths[i]; });
+      y += 14;
+    }
+  }
+
+  doc.y = y + 16;
+  doc.x = 36;
+  doc.fontSize(7).fillColor('#9ca3af').text(`Generado el ${new Date().toISOString().slice(0, 10)}`);
+  doc.end();
+}
+
+async function renderWeeklyReportXLSX(res, summary) {
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('Resumen semanal');
+
+  ws.addRow(['Reporte semanal comercial']);
+  ws.getRow(1).font = { bold: true, size: 14 };
+  ws.addRow([`Período: ${summary.desde} al ${summary.hasta}`]);
+  ws.addRow([]);
+  ws.addRow(['Visitas realizadas', summary.totales.visitas]);
+  ws.addRow(['Llamadas realizadas', summary.totales.llamadas]);
+  ws.addRow(['Ventas (cantidad)', summary.totales.ventas_cantidad]);
+  ws.addRow(['Ventas (importe)', summary.totales.ventas_total]);
+  ws.addRow(['Cobranzas (cantidad)', summary.totales.cobranzas_cantidad]);
+  ws.addRow(['Cobranzas (importe)', summary.totales.cobranzas_total]);
+  ws.addRow([]);
+
+  const headerRowIdx = ws.rowCount + 1;
+  ws.addRow(['Responsable', 'Visitas', 'Llamadas', 'Ventas (cant.)', 'Ventas (importe)', 'Cobranzas (cant.)', 'Cobranzas (importe)']);
+  ws.getRow(headerRowIdx).font = { bold: true };
+  for (const r of summary.porResponsable) {
+    ws.addRow([r.responsable, r.visitas, r.llamadas, r.ventas_cantidad, r.ventas_total, r.cobranzas_cantidad, r.cobranzas_total]);
+  }
+  ws.columns.forEach(col => { col.width = 20; });
+
+  const buffer = await wb.xlsx.writeBuffer();
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="reporte_semanal_${summary.desde}_a_${summary.hasta}.xlsx"`);
+  res.send(buffer);
+}
+
+router.get('/weekly-report', async (req, res) => {
+  const format = req.query.format || 'pdf';
+  const summary = await getWeeklySummary(db);
+  if (format === 'xlsx') return renderWeeklyReportXLSX(res, summary);
+  return renderWeeklyReportPDF(res, summary);
+});
+
+const QUERIES = {
+  clients: `SELECT id, razon_social, nombre_comercial, cuit, contacto_principal, telefono, email, provincia, localidad, estado, potencial_comercial, responsable_comercial FROM clients ORDER BY razon_social`,
+  prospects: `SELECT id, empresa, contacto, telefono, email, provincia, localidad, origen, potencial_estimado, estado, responsable FROM prospects ORDER BY empresa`,
+  sales: `SELECT s.numero, c.razon_social as cliente, s.fecha, s.total, s.moneda, s.vendedor FROM sales s JOIN clients c ON c.id = s.client_id ORDER BY s.fecha DESC`,
+  quotes: `SELECT q.numero, c.razon_social as cliente, q.fecha, q.fecha_vencimiento, q.total, q.moneda, q.estado, q.responsable FROM quotes q JOIN clients c ON c.id = q.client_id ORDER BY q.fecha DESC`,
+  tasks: `SELECT t.titulo, c.razon_social as cliente, t.fecha, t.hora, t.prioridad, t.responsable, t.estado FROM tasks t LEFT JOIN clients c ON c.id = t.client_id ORDER BY t.fecha DESC`,
+  activities: `SELECT a.fecha, c.razon_social as cliente, a.tipo, a.descripcion, a.usuario FROM activities a JOIN clients c ON c.id = a.client_id ORDER BY a.fecha DESC`,
+  pipeline: `SELECT po.titulo, COALESCE(c.razon_social, p.empresa) as cliente_o_prospecto, po.etapa, po.importe_estimado, po.probabilidad, po.responsable, po.fecha_cierre_estimada FROM pipeline_opportunities po LEFT JOIN clients c ON c.id = po.client_id LEFT JOIN prospects p ON p.id = po.prospect_id`,
+  milestones: `SELECT m.fecha, c.razon_social as cliente, m.tipo, m.descripcion FROM milestones m JOIN clients c ON c.id = m.client_id ORDER BY m.fecha DESC`,
+  collections: `SELECT col.fecha, c.razon_social as cliente, col.comprobante, col.factura, col.importe, col.moneda, col.medio_pago, col.responsable FROM collections col JOIN clients c ON c.id = col.client_id ORDER BY col.fecha DESC`,
+  invoices: `SELECT i.numero, c.razon_social as cliente, i.fecha, i.fecha_vencimiento, i.importe, i.saldo, i.estado FROM invoices i JOIN clients c ON c.id = i.client_id ORDER BY i.fecha_vencimiento`,
+};
+
+function rowsToCSV(rows) {
+  if (!rows.length) return '';
+  const headers = Object.keys(rows[0]);
+  const lines = [headers.join(',')];
+  for (const r of rows) lines.push(headers.map(h => `"${String(r[h] ?? '').replace(/"/g, '""')}"`).join(','));
+  return lines.join('\n');
+}
+
+async function rowsToXLSXBuffer(sheetsData) {
+  const wb = new ExcelJS.Workbook();
+  for (const [name, rows] of Object.entries(sheetsData)) {
+    const ws = wb.addWorksheet(name.slice(0, 31));
+    if (!rows.length) continue;
+    const headers = Object.keys(rows[0]);
+    ws.addRow(headers);
+    ws.getRow(1).font = { bold: true };
+    for (const r of rows) ws.addRow(headers.map(h => r[h]));
+    ws.columns.forEach(col => { col.width = 20; });
+  }
+  return wb.xlsx.writeBuffer();
+}
+
+function rowsToPDF(res, title, rows) {
+  const doc = new PDFDocument({ margin: 30, size: 'A4', layout: 'landscape' });
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="${title}.pdf"`);
+  doc.pipe(res);
+  doc.fontSize(16).text(title, { align: 'center' });
+  doc.moveDown();
+  if (!rows.length) { doc.fontSize(10).text('Sin datos.'); doc.end(); return; }
+  const headers = Object.keys(rows[0]);
+  const colWidth = (doc.page.width - 60) / headers.length;
+  doc.fontSize(8);
+  let y = doc.y;
+  headers.forEach((h, i) => doc.text(String(h), 30 + i * colWidth, y, { width: colWidth }));
+  y += 14;
+  doc.moveTo(30, y).lineTo(doc.page.width - 30, y).stroke();
+  y += 4;
+  for (const row of rows) {
+    if (y > doc.page.height - 40) { doc.addPage(); y = 40; }
+    headers.forEach((h, i) => doc.text(String(row[h] ?? ''), 30 + i * colWidth, y, { width: colWidth }));
+    y += 14;
+  }
+  doc.end();
+}
+
+router.get('/:entity', async (req, res) => {
+  const { entity } = req.params;
+  const format = req.query.format || 'xlsx';
+
+  if (entity === 'all') {
+    const sheets = {};
+    for (const [name, query] of Object.entries(QUERIES)) sheets[name] = await db.prepare(query).all();
+    const buffer = await rowsToXLSXBuffer(sheets);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="crm_export_completo.xlsx"');
+    return res.send(buffer);
+  }
+
+  const query = QUERIES[entity];
+  if (!query) return res.status(400).json({ error: 'Entidad no soportada para exportación' });
+  const rows = await db.prepare(query).all();
+
+  if (format === 'csv') {
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${entity}.csv"`);
+    return res.send(rowsToCSV(rows));
+  }
+  if (format === 'pdf') {
+    return rowsToPDF(res, entity, rows);
+  }
+  const buffer = await rowsToXLSXBuffer({ [entity]: rows });
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="${entity}.xlsx"`);
+  res.send(buffer);
+});
+
+export default router;

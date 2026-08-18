@@ -1,0 +1,29 @@
+# Dependencias
+node_modules/
+
+# Build de frontend
+client/dist/
+
+# Base de datos local (solo se usa si no hay TURSO_DATABASE_URL configurado)
+server/data/*.db
+server/data/*.db-shm
+server/data/*.db-wal
+
+# Archivos subidos (adjuntos de clientes, importaciones)
+server/uploads/*
+!server/uploads/.gitkeep
+
+# Variables de entorno con secretos
+.env
+.env.local
+server/.env
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor / OS
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea
