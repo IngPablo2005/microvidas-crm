@@ -282,7 +282,14 @@ async function run() {
   console.log(`Seed completo: ${clientIds.length} clientes, ${prospectIds.length} prospectos, ${createdSales.length} ventas.`);
 }
 
-const force = process.argv.includes('--force');
-await initDb();
-if (force) await clearAll();
-await seed();
+export { clearAll, seed, run };
+
+// Solo se ejecuta automáticamente cuando este archivo se corre directo como script
+// (ej. "npm run seed"), no cuando otro módulo lo importa (ej. la ruta /api/admin/seed).
+const isMain = process.argv[1] && process.argv[1].endsWith('seed.js');
+if (isMain) {
+  const force = process.argv.includes('--force');
+  await initDb();
+  if (force) await clearAll();
+  await seed();
+}

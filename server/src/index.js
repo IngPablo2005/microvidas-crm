@@ -3,6 +3,7 @@ import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { initDb } from './db.js';
+import { seed } from './seed.js';
 
 import authRoutes from './routes/auth.js';
 import clientsRoutes from './routes/clients.js';
@@ -46,6 +47,22 @@ app.use('/api/import', importRoutes);
 app.use('/api/export', exportRoutes);
 
 app.get('/api/health', (req, res) => res.json({ ok: true, ts: new Date().toISOString() }));
+
+// Siembra inicial de datos de ejemplo en producción, protegida con una clave secreta
+// (variable de entorno ADMIN_SEED_KEY). Se visita una sola vez desde el navegador:
+// https://<tu-app>.onrender.com/api/admin/seed?key=<ADMIN_SEED_KEY>
+// No hace nada si ya hay datos cargados (ver seed.js).
+app.get('/api/admin/seed', async (req, res) => {
+  if (!process.env.ADMIN_SEED_KEY || req.query.key !== process.env.ADMIN_SEED_KEY) {
+    return res.status(403).json({ error: 'forbidden' });
+  }
+  try {
+    await seed();
+    res.json({ ok: true, message: 'Listo. Si no había datos, se cargaron los datos de ejemplo. Si ya había, no se tocó nada.' });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
 
 // Servir frontend build en producción
 const clientDist = path.join(__dirname, '..', '..', 'client', 'dist');

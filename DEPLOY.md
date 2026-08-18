@@ -23,9 +23,18 @@ Cuando tengas las tres, avisame los nombres de usuario (o simplemente decime "ya
    - Un **Auth Token** (Turso lo genera con un botón "Create Token" o similar)
 4. Pasame esos dos valores acá en el chat (o subilos como archivo) — los voy a usar solo para configurar el despliegue, no quedan expuestos en ningún lado público.
 
-## Paso 3 — Subir el código a GitHub
+## Paso 3 — Subir el código a GitHub (con GitHub Desktop)
 
-Esto lo hago yo por vos una vez que me confirmes que ya tenés la cuenta de GitHub creada: te voy a pasar el link de un repositorio para que lo autorices, o te doy los comandos exactos si preferís hacerlo vos mismo desde la terminal.
+Por una restricción de seguridad de mi entorno de trabajo, no puedo subir el código directamente a tu cuenta de GitHub — lo tenés que hacer vos, una sola vez para el primer envío, con un programa gratuito y sin usar la terminal:
+
+1. Descargá e instalá **GitHub Desktop**: [desktop.github.com](https://desktop.github.com).
+2. Abrilo e iniciá sesión con tu cuenta de GitHub (`ingpablo2005`).
+3. "File" → "Clone repository" → pestaña "GitHub.com" → elegís `ingpablo2005/microvidas-crm` (el repositorio vacío que ya creaste) → "Clone". Elegí cualquier carpeta de tu PC, por ejemplo tu carpeta de Documentos.
+4. Te voy a pasar un archivo `.zip` con todo el código. Extraelo (clic derecho → "Extraer todo" en Windows, o doble clic en Mac) y copiá **todo el contenido de adentro** (las carpetas `client`, `server`, y los archivos sueltos como `README.md`, `render.yaml`, etc.) directamente dentro de la carpeta que clonaste en el paso 3 — no la carpeta del zip en sí, sino lo que está adentro de ella.
+5. Volvés a GitHub Desktop: vas a ver automáticamente la lista de todos los archivos nuevos. Abajo a la izquierda escribís un resumen como "Primera versión" y tocás **"Commit to main"**.
+6. Arriba, botón **"Push origin"**. Listo — el código ya está en tu repositorio de GitHub.
+
+Para cada actualización futura que te pase (una mejora, una corrección), el proceso se repite igual: te doy el zip actualizado, reemplazás los archivos en esa misma carpeta, y en GitHub Desktop volvés a hacer "Commit to main" → "Push origin". Dos clics.
 
 ## Paso 4 — Conectar Render
 
@@ -38,11 +47,18 @@ Esto lo hago yo por vos una vez que me confirmes que ya tenés la cuenta de GitH
 
 ## Paso 5 — Cargar los datos iniciales
 
-Una sola vez, hay que "sembrar" la base con los datos de ejemplo (o podés arrancar vacío y cargar todo a mano desde la app). Si querés los datos de ejemplo, avisame cuando el Paso 4 esté listo y lo hago yo, corriendo el script de siembra contra tu base de Turso.
+La base de Turso empieza vacía (sin usuarios ni datos de ejemplo), aunque la app ya esté "Live" en Render. Para cargarlos, una sola vez:
+
+1. En Render, entrá al servicio → **"Environment"** y copiá el valor de la variable **`ADMIN_SEED_KEY`** (Render la generó sola).
+2. Abrí en el navegador (con tu link real y esa clave pegada al final):
+   `https://microvidas-crm.onrender.com/api/admin/seed?key=LA_CLAVE_QUE_COPIASTE`
+3. Debería responder algo como `{"ok":true, "message":"Listo..."}`. Ya podés entrar a la app y hacer login.
+
+Esta dirección es segura para dejarla así: sin la clave correcta responde "forbidden", y si ya hay datos cargados no los duplica ni los borra aunque la visites de nuevo por error.
 
 ## Cómo se actualiza de ahí en adelante
 
-- **Cuando yo (Claude) te haga una mejora en una sesión como esta**, subo el cambio a GitHub y Render redespliega solo — no tenés que hacer nada.
+- **Cuando te haga una mejora en una sesión como esta**, te paso el zip actualizado y hacés los dos clics en GitHub Desktop ("Commit to main" → "Push origin") descriptos en el Paso 3. En cuanto el push llega a GitHub, Render detecta el cambio y redespliega solo — no hay que tocar nada en Render.
 - **Si en algún momento querés forzar una actualización manual** (por ejemplo, redesplegar sin que haya cambios nuevos), entrás al dashboard de Render desde el navegador de tu PC o del teléfono, y tocás "Manual Deploy" → "Deploy latest commit". Funciona igual de bien desde el celular que desde la PC, porque es solo una página web.
 - Los datos (clientes, ventas, cobranzas, etc.) viven en Turso, separados de la app — así que un redespliegue nunca los borra.
 
