@@ -118,8 +118,50 @@ router.put('/:id', async (req, res) => {
   res.json({ ok: true });
 });
 
+// Elimina un cliente y absolutamente todo lo que depende de él (contactos, ventas,
+// cotizaciones, cobranzas, facturas, tareas, eventos, notas, hitos, adjuntos, pipeline,
+// notificaciones), para no dejar datos huérfanos en otros módulos. Es irreversible.
 router.delete('/:id', async (req, res) => {
-  await db.prepare('DELETE FROM clients WHERE id = ?').run(req.params.id);
+  const clientId = req.params.id;
+  const client = await db.prepare('SELECT id FROM clients WHERE id = ?').get(clientId);
+  if (!client) return res.status(404).json({ error: 'Cliente no encontrado' });
+
+  const taskIds = (await db.prepare('SELECT id FROM tasks WHERE client_id = ?').all(clientId)).map(r => r.id);
+  const eventIds = (await db.prepare('SELECT id FROM calendar_events WHERE client_id = ?').all(clientId)).map(r => r.id);
+  const saleIds = (await db.prepare('SELECT id FROM sales WHERE client_id = ?').all(clientId)).map(r => r.id);
+  const quoteIds = (await db.prepare('SELECT id FROM quotes WHERE client_id = ?').all(clientId)).map(r => r.id);
+
+  // Borrar del disco los archivos adjuntos del cliente (best-effort, no bloquea si falla)
+  const atts = await db.prepare('SELECT filename FROM attachments WHERE client_id = ?').all(clientId);
+  for (const a of atts) {
+    if (a.filename) fs.unlink(path.join(uploadDir, a.filename), () => {});
+  }
+
+  await db.prepare('DELETE FROM notifications WHERE client_id = ?').run(clientId);
+  for (const tid of taskIds) await db.prepare(`DELETE FROM notifications WHERE ref_table = 'tasks' AND ref_id = ?`).run(tid);
+  for (const eid of eventIds) await db.prepare(`DELETE FROM notifications WHERE ref_table = 'calendar_events' AND ref_id = ?`).run(eid);
+
+  await db.prepare('DELETE FROM payment_commitments WHERE client_id = ?').run(clientId);
+  await db.prepare('DELETE FROM invoices WHERE client_id = ?').run(clientId);
+  await db.prepare('DELETE FROM collections WHERE client_id = ?').run(clientId);
+  await db.prepare('DELETE FROM notes WHERE client_id = ?').run(clientId);
+  await db.prepare('DELETE FROM attachments WHERE client_id = ?').run(clientId);
+  await db.prepare('DELETE FROM milestones WHERE client_id = ?').run(clientId);
+  await db.prepare('DELETE FROM activities WHERE client_id = ?').run(clientId);
+  await db.prepare('DELETE FROM calendar_events WHERE client_id = ?').run(clientId);
+  await db.prepare('DELETE FROM tasks WHERE client_id = ?').run(clientId);
+
+  for (const sid of saleIds) await db.prepare('DELETE FROM sale_items WHERE sale_id = ?').run(sid);
+  await db.prepare('DELETE FROM sales WHERE client_id = ?').run(clientId);
+
+  for (const qid of quoteIds) await db.prepare('DELETE FROM quote_items WHERE quote_id = ?').run(qid);
+  await db.prepare('DELETE FROM quotes WHERE client_id = ?').run(clientId);
+
+  await db.prepare('DELETE FROM pipeline_opportunities WHERE client_id = ?').run(clientId);
+  await db.prepare('DELETE FROM contacts WHERE client_id = ?').run(clientId);
+  await db.prepare('UPDATE prospects SET converted_client_id = NULL WHERE converted_client_id = ?').run(clientId);
+
+  await db.prepare('DELETE FROM clients WHERE id = ?').run(clientId);
   res.json({ ok: true });
 });
 

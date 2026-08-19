@@ -73,6 +73,11 @@ client/   Aplicación React (dashboard, clientes, prospectos, pipeline, cotizaci
 
 Todos los módulos de la especificación original: dashboard con KPIs y alertas inteligentes, ficha de cliente con timeline/hitos/contactos/documentos/cuenta corriente, prospectos con conversión a cliente, pipeline visual, cotizaciones con cálculo automático e items, ventas con filtros, cobranzas con cuenta corriente y compromisos de pago, tareas y calendario (día/semana/mes) integrados, reportes con gráficos, importación masiva desde Excel con mapeo de columnas y detección de duplicados, exportación a Excel/CSV/PDF, buscador global, y usuarios con roles (Administrador, Gerente, Vendedor, Consulta).
 
+### Eliminar clientes y registrar visitas/llamadas desde el Dashboard
+
+- **Eliminar cliente:** desde el listado de Clientes (ícono de tacho en cada fila) o desde la ficha del cliente ("Eliminar cliente", arriba a la derecha). Pide confirmación porque es irreversible: borra también todas sus ventas, cotizaciones, cobranzas, facturas, tareas, notas, hitos, adjuntos y oportunidades de pipeline asociadas, para no dejar datos sueltos en otros módulos.
+- **Registrar visita o llamada:** en el Dashboard hay una tarjeta "Registrar visita o llamada" para anotar rápido un contacto con un cliente (sin entrar a su ficha), con fecha y comentario opcional. Queda guardado en el historial del cliente y alimenta el reporte semanal (visitas y llamadas realizadas). Si la fecha registrada es más reciente que la que ya tenía el cliente, también actualiza su "último contacto".
+
 ### Notificaciones y alertas de tareas/eventos programados
 
 La campana en el header (arriba a la derecha) revisa cada 45 segundos si hay recordatorios vencidos:

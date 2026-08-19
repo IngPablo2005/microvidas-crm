@@ -21,6 +21,7 @@ import searchRoutes from './routes/search.js';
 import importRoutes from './routes/importRoutes.js';
 import exportRoutes from './routes/exportRoutes.js';
 import notificationsRoutes from './routes/notifications.js';
+import activitiesRoutes from './routes/activities.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -41,6 +42,7 @@ app.use('/api/calendar', calendarRoutes);
 app.use('/api/collections', collectionsRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/notifications', notificationsRoutes);
+app.use('/api/activities', activitiesRoutes);
 app.use('/api/reports', reportsRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/import', importRoutes);

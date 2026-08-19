@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../api/client.js';
 import { Card, Badge, Button, Modal, Field, inputCls, Loading, EmptyState } from '../../components/UI.jsx';
-import { Plus, Download, Upload } from 'lucide-react';
+import { Plus, Download, Upload, Trash2 } from 'lucide-react';
 
 const ESTADOS = ['Activo', 'Inactivo', 'Perdido'];
 const POTENCIALES = ['Alto', 'Medio', 'Bajo'];
@@ -21,6 +21,8 @@ export default function ClientsList() {
   const [showNew, setShowNew] = useState(false);
   const [form, setForm] = useState(emptyClient);
   const [provincias, setProvincias] = useState([]);
+  const [toDelete, setToDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -39,6 +41,18 @@ export default function ClientsList() {
     setShowNew(false);
     setForm(emptyClient);
     navigate(`/clientes/${data.id}`);
+  }
+
+  async function confirmDelete() {
+    if (!toDelete) return;
+    setDeleting(true);
+    try {
+      await api.delete(`/clients/${toDelete.id}`);
+      setToDelete(null);
+      load();
+    } finally {
+      setDeleting(false);
+    }
   }
 
   return (
@@ -81,6 +95,7 @@ export default function ClientsList() {
                 <th className="text-left px-4 py-2.5">Potencial</th>
                 <th className="text-left px-4 py-2.5">Estado</th>
                 <th className="text-left px-4 py-2.5">Próximo contacto</th>
+                <th className="text-right px-4 py-2.5"></th>
               </tr>
             </thead>
             <tbody>
@@ -93,6 +108,15 @@ export default function ClientsList() {
                   <td className="px-4 py-2.5"><Badge text={c.potencial_comercial || '—'} colorKey={c.potencial_comercial === 'Alto' ? 'Activo' : c.potencial_comercial === 'Bajo' ? 'Perdido' : 'Contactado'} /></td>
                   <td className="px-4 py-2.5"><Badge text={c.estado} /></td>
                   <td className="px-4 py-2.5 text-gray-500">{c.proximo_contacto || '—'}</td>
+                  <td className="px-4 py-2.5 text-right">
+                    <button
+                      title="Eliminar cliente"
+                      onClick={e => { e.stopPropagation(); setToDelete(c); }}
+                      className="text-gray-400 hover:text-red-600 p-1 rounded hover:bg-red-50"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -134,6 +158,19 @@ export default function ClientsList() {
             <Button type="submit">Crear cliente</Button>
           </div>
         </form>
+      </Modal>
+
+      <Modal open={!!toDelete} onClose={() => setToDelete(null)} title="Eliminar cliente">
+        <p className="text-sm text-gray-600">
+          ¿Seguro que querés eliminar a <span className="font-semibold text-gray-800">{toDelete?.razon_social}</span>?
+          Esta acción también borra sus ventas, cotizaciones, cobranzas, tareas, notas y todo lo relacionado. No se puede deshacer.
+        </p>
+        <div className="flex justify-end gap-2 mt-4">
+          <Button variant="secondary" type="button" onClick={() => setToDelete(null)}>Cancelar</Button>
+          <Button variant="danger" type="button" onClick={confirmDelete} disabled={deleting}>
+            {deleting ? 'Eliminando...' : 'Eliminar definitivamente'}
+          </Button>
+        </div>
       </Modal>
     </div>
   );

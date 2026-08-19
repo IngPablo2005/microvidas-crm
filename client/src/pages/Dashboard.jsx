@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/client.js';
-import { KpiCard, Card, Badge, fmtUSD, Loading, Button } from '../components/UI.jsx';
+import { KpiCard, Card, Badge, fmtUSD, Loading, Button, Field, inputCls } from '../components/UI.jsx';
 import { CATEGORICAL, STATUS } from '../colors.js';
 import {
-  DollarSign, TrendingUp, FileText, Target, CheckSquare, AlertTriangle, Users, Wallet, Clock
+  DollarSign, TrendingUp, FileText, Target, CheckSquare, AlertTriangle, Users, Wallet, Clock, Phone, MapPin
 } from 'lucide-react';
 
 const STAGE_LABELS = {
@@ -110,6 +110,8 @@ export default function Dashboard() {
         </Card>
       </div>
 
+      <VisitasLlamadasCard />
+
       <Card className="p-5">
         <h2 className="font-semibold text-gray-800 mb-4 flex items-center gap-2"><AlertTriangle size={16} className="text-amber-500" /> Alertas inteligentes</h2>
         {alerts.length === 0 && <p className="text-sm text-gray-400">Sin alertas activas.</p>}
@@ -132,5 +134,92 @@ export default function Dashboard() {
         </div>
       </Card>
     </div>
+  );
+}
+
+const TIPOS_CONTACTO = ['Visita', 'Llamada'];
+
+function VisitasLlamadasCard() {
+  const [clients, setClients] = useState([]);
+  const [recientes, setRecientes] = useState([]);
+  const [form, setForm] = useState({ client_id: '', tipo: 'Visita', fecha: new Date().toISOString().slice(0, 10), descripcion: '' });
+  const [saving, setSaving] = useState(false);
+  const [loadingList, setLoadingList] = useState(true);
+
+  async function loadRecientes() {
+    setLoadingList(true);
+    const { data } = await api.get('/activities', { params: { tipo: TIPOS_CONTACTO.join(','), limit: 8 } });
+    setRecientes(data);
+    setLoadingList(false);
+  }
+
+  useEffect(() => {
+    api.get('/clients', { params: { pageSize: 300 } }).then(({ data }) => setClients(data.rows));
+    loadRecientes();
+  }, []);
+
+  async function registrar(e) {
+    e.preventDefault();
+    if (!form.client_id) return;
+    setSaving(true);
+    try {
+      await api.post('/activities', { ...form, usuario: 'Usuario' });
+      setForm(f => ({ ...f, client_id: '', descripcion: '' }));
+      loadRecientes();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card className="p-5">
+      <h2 className="font-semibold text-gray-800 mb-4 flex items-center gap-2"><Phone size={16} className="text-blue-500" /> Registrar visita o llamada</h2>
+      <div className="grid md:grid-cols-2 gap-6">
+        <form onSubmit={registrar} className="space-y-1">
+          <Field label="Cliente *">
+            <select required className={inputCls} value={form.client_id} onChange={e => setForm(f => ({ ...f, client_id: e.target.value }))}>
+              <option value="">Seleccionar...</option>
+              {clients.map(c => <option key={c.id} value={c.id}>{c.razon_social}</option>)}
+            </select>
+          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Tipo">
+              <select className={inputCls} value={form.tipo} onChange={e => setForm(f => ({ ...f, tipo: e.target.value }))}>
+                {TIPOS_CONTACTO.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </Field>
+            <Field label="Fecha">
+              <input type="date" className={inputCls} value={form.fecha} onChange={e => setForm(f => ({ ...f, fecha: e.target.value }))} />
+            </Field>
+          </div>
+          <Field label="Comentario">
+            <textarea rows={2} className={inputCls} placeholder="Ej: se mostró interesado en ampliar el pedido..." value={form.descripcion} onChange={e => setForm(f => ({ ...f, descripcion: e.target.value }))} />
+          </Field>
+          <div className="flex justify-end pt-1">
+            <Button type="submit" disabled={saving}>{saving ? 'Guardando...' : 'Registrar'}</Button>
+          </div>
+        </form>
+
+        <div>
+          <div className="text-xs text-gray-400 uppercase font-medium mb-2">Últimas registradas</div>
+          {loadingList ? <Loading /> : recientes.length === 0 ? (
+            <p className="text-sm text-gray-400">Todavía no registraste visitas ni llamadas.</p>
+          ) : (
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {recientes.map(r => (
+                <div key={r.id} className="flex items-start gap-2 border border-gray-100 rounded-md p-2.5">
+                  {r.tipo === 'Visita' ? <MapPin size={14} className="text-emerald-500 mt-0.5" /> : <Phone size={14} className="text-blue-500 mt-0.5" />}
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm text-gray-800">{r.cliente_nombre}</div>
+                    <div className="text-xs text-gray-400">{r.tipo} · {new Date(r.fecha).toLocaleString('es-AR')}{r.usuario ? ` · ${r.usuario}` : ''}</div>
+                    {r.descripcion && <div className="text-xs text-gray-500 mt-0.5">{r.descripcion}</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </Card>
   );
 }

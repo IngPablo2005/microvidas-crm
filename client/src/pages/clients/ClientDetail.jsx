@@ -4,7 +4,7 @@ import api from '../../api/client.js';
 import { Card, Badge, Button, Modal, Field, inputCls, Loading, EmptyState, fmtUSD, fmtDate } from '../../components/UI.jsx';
 import {
   StickyNote, CheckSquare, FileText, ShoppingCart, Award, Image as ImageIcon, CalendarPlus, Phone, Mail,
-  MessageCircle, Users as UsersIcon, ArrowLeft
+  MessageCircle, Users as UsersIcon, ArrowLeft, Trash2
 } from 'lucide-react';
 
 const TABS = ['Resumen', 'Historial', 'Hitos', 'Contactos', 'Cobranzas', 'Documentos'];
@@ -20,6 +20,7 @@ export default function ClientDetail() {
   const [account, setAccount] = useState(null);
   const [modal, setModal] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -40,13 +41,28 @@ export default function ClientDetail() {
 
   useEffect(() => { load(); }, [load]);
 
+  async function deleteClient() {
+    setDeleting(true);
+    try {
+      await api.delete(`/clients/${id}`);
+      navigate('/clientes');
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   if (loading || !client) return <Loading />;
 
   return (
     <div className="space-y-4">
-      <button onClick={() => navigate('/clientes')} className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1">
-        <ArrowLeft size={14} /> Volver a clientes
-      </button>
+      <div className="flex items-center justify-between">
+        <button onClick={() => navigate('/clientes')} className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1">
+          <ArrowLeft size={14} /> Volver a clientes
+        </button>
+        <button onClick={() => setModal('eliminar')} className="text-sm text-red-500 hover:text-red-700 flex items-center gap-1">
+          <Trash2 size={14} /> Eliminar cliente
+        </button>
+      </div>
 
       <Card className="p-5">
         <div className="flex items-start justify-between flex-wrap gap-4">
@@ -98,6 +114,19 @@ export default function ClientDetail() {
       {modal === 'hito' && <MilestoneModal clientId={id} onClose={() => setModal(null)} onSaved={load} />}
       {modal === 'archivo' && <FileModal clientId={id} onClose={() => setModal(null)} onSaved={load} />}
       {modal === 'reunion' && <MeetingModal clientId={id} onClose={() => setModal(null)} onSaved={load} />}
+
+      <Modal open={modal === 'eliminar'} onClose={() => setModal(null)} title="Eliminar cliente">
+        <p className="text-sm text-gray-600">
+          ¿Seguro que querés eliminar a <span className="font-semibold text-gray-800">{client.razon_social}</span>?
+          Esta acción también borra sus ventas, cotizaciones, cobranzas, tareas, notas y todo lo relacionado. No se puede deshacer.
+        </p>
+        <div className="flex justify-end gap-2 mt-4">
+          <Button variant="secondary" type="button" onClick={() => setModal(null)}>Cancelar</Button>
+          <Button variant="danger" type="button" onClick={deleteClient} disabled={deleting}>
+            {deleting ? 'Eliminando...' : 'Eliminar definitivamente'}
+          </Button>
+        </div>
+      </Modal>
     </div>
   );
 }
