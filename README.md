@@ -101,6 +101,14 @@ En la pantalla de Reportes hay dos botones para descargar un resumen de la activ
 - **Reporte semanal (Excel):** el mismo contenido en una planilla, para quien prefiera manipular los datos.
 - Las "visitas" y "llamadas realizadas" se toman de la tabla de actividades (`activities`, tipos `Visita` y `Llamada`) que ya registra cada interacción en la ficha de cliente; ventas y cobranzas se toman de sus respectivos módulos.
 
+### Tareas diarias de la semana (Reportes → "Tareas diarias de la semana")
+
+Además del resumen anterior, en Reportes hay una sección que muestra, día por día (Lunes a Viernes de la semana en curso), las tareas comerciales realizadas: llamadas, visitas, ensayos, ventas y cobranzas — con el detalle escrito tal cual se cargó en cada una (no solo un total).
+
+- **Registrar ensayo:** la tarjeta del Dashboard "Registrar visita, llamada o ensayo" ahora también permite cargar ensayos de campo, con el mismo formato que visitas y llamadas (cliente, fecha y comentario).
+- La sección de Reportes agrupa por día y categoría: para llamadas, visitas y ensayos muestra el comentario escrito al cargarlos; para ventas muestra los productos y el total; para cobranzas, el importe y medio de pago.
+- Se puede descargar en PDF ("Detalle diario (PDF)") o Excel ("Detalle diario (Excel)") con el mismo desglose por día.
+
 ## Simplificaciones del prototipo (a reforzar antes de producción)
 
 - La autenticación emite un JWT válido, pero los endpoints de negocio no verifican el token en cada request (solo `/auth/me` y la gestión de usuarios lo exigen). Para producción, aplicar el middleware `requireAuth`/`requireRole` a todas las rutas según el rol correspondiente.

@@ -3,7 +3,94 @@ import api from '../api/client.js';
 import { Card, Loading, Button, fmtUSD } from '../components/UI.jsx';
 import { CATEGORICAL, INK } from '../colors.js';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
-import { FileDown } from 'lucide-react';
+import { FileDown, Phone, MapPin, FlaskConical, DollarSign, Wallet } from 'lucide-react';
+
+const CATEGORIAS_DIARIAS = [
+  { key: 'llamadas', label: 'Llamadas', icon: Phone, color: 'text-blue-500' },
+  { key: 'visitas', label: 'Visitas', icon: MapPin, color: 'text-emerald-500' },
+  { key: 'ensayos', label: 'Ensayos', icon: FlaskConical, color: 'text-purple-500' },
+  { key: 'ventas', label: 'Ventas', icon: DollarSign, color: 'text-amber-500' },
+  { key: 'cobranzas', label: 'Cobranzas', icon: Wallet, color: 'text-cyan-600' },
+];
+
+function detalleItem(catKey, item) {
+  if (catKey === 'ventas') {
+    return `Venta ${item.numero} — ${item.productos || 'sin productos'} — Total ${item.moneda} ${fmtUSD(item.total)}${item.observaciones ? ' — ' + item.observaciones : ''}`;
+  }
+  if (catKey === 'cobranzas') {
+    return `${item.moneda} ${fmtUSD(item.importe)} (${item.medio_pago})${item.comprobante ? ' — comp. ' + item.comprobante : ''}${item.observaciones ? ' — ' + item.observaciones : ''}`;
+  }
+  return item.descripcion && item.descripcion.trim() ? item.descripcion : '(sin detalle escrito)';
+}
+
+function DailyDetailCard() {
+  const [detail, setDetail] = useState(null);
+
+  useEffect(() => {
+    api.get('/reports/weekly-daily-detail').then(({ data }) => setDetail(data));
+  }, []);
+
+  return (
+    <Card className="p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+        <div>
+          <div className="text-sm font-semibold text-gray-700">Tareas diarias de la semana</div>
+          <div className="text-xs text-gray-400">
+            Llamadas, visitas, ventas, cobranzas y ensayos, con el detalle escrito tal cual se cargó
+            {detail ? ` — Lunes ${detail.lunes} a Viernes ${detail.viernes}` : ''}
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={() => window.open('/api/export/weekly-daily-detail?format=xlsx', '_blank')}>
+            <FileDown size={14} className="inline mr-1" /> Detalle diario (Excel)
+          </Button>
+          <Button onClick={() => window.open('/api/export/weekly-daily-detail?format=pdf', '_blank')}>
+            <FileDown size={14} className="inline mr-1" /> Detalle diario (PDF)
+          </Button>
+        </div>
+      </div>
+
+      {!detail ? <Loading /> : (
+        <div className="grid md:grid-cols-5 gap-3">
+          {detail.dias.map(dia => {
+            const totalDia = CATEGORIAS_DIARIAS.reduce((s, c) => s + dia[c.key].length, 0);
+            return (
+              <div key={dia.fecha} className="border border-gray-100 rounded-md p-3 min-h-[120px]">
+                <div className="text-sm font-semibold text-gray-800">{dia.diaSemana}</div>
+                <div className="text-xs text-gray-400 mb-2">{dia.fecha}</div>
+                {totalDia === 0 ? (
+                  <p className="text-xs text-gray-400">Sin tareas registradas.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {CATEGORIAS_DIARIAS.map(cat => {
+                      const items = dia[cat.key];
+                      if (!items.length) return null;
+                      const Icon = cat.icon;
+                      return (
+                        <div key={cat.key}>
+                          <div className={`flex items-center gap-1 text-xs font-medium ${cat.color}`}>
+                            <Icon size={12} /> {cat.label} ({items.length})
+                          </div>
+                          <ul className="mt-1 space-y-1">
+                            {items.map(item => (
+                              <li key={item.id} className="text-xs text-gray-600 leading-snug">
+                                <span className="font-medium text-gray-700">{item.cliente}:</span> {detalleItem(cat.key, item)}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Card>
+  );
+}
 
 const BLUE = CATEGORICAL[0];
 
@@ -57,6 +144,8 @@ export default function Reports() {
           </Button>
         </div>
       </div>
+
+      <DailyDetailCard />
 
       <div className="grid md:grid-cols-2 gap-4">
         <ChartCard title="Ventas — últimos 7 días">

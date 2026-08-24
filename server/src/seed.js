@@ -113,6 +113,9 @@ async function run() {
     [2, 'WhatsApp', 'Confirmación de pedido mensual.', 'Sofía Ramírez', -1],
     [4, 'Cobranza', 'Gestión de cobranza por factura vencida.', 'Sofía Ramírez', -5],
     [8, 'Venta', 'Venta de DefendBio Control Biológico.', 'Sofía Ramírez', -40],
+    [3, 'Visita', 'Visita técnica al lote piloto, se relevó estado del cultivo de maíz.', 'Martín Gómez', 0],
+    [6, 'Llamada', 'Llamada para coordinar reposición de stock.', 'Sofía Ramírez', 0],
+    [3, 'Ensayo', 'Instalación de ensayo comparativo de NutriRaiz en el lote piloto.', 'Martín Gómez', 0],
   ];
   for (const a of actSeed) await insAct.run(clientIds[a[0]], a[1], a[2], a[3], d(a[4], 'YYYY-MM-DD HH:mm'));
 

@@ -3,6 +3,7 @@ import ExcelJS from 'exceljs';
 import PDFDocument from 'pdfkit';
 import db from '../db.js';
 import { getWeeklySummary } from '../lib/weeklySummary.js';
+import { getWeeklyDailyDetail } from '../lib/weeklyDailyDetail.js';
 
 const router = express.Router();
 
@@ -101,6 +102,118 @@ router.get('/weekly-report', async (req, res) => {
   const summary = await getWeeklySummary(db);
   if (format === 'xlsx') return renderWeeklyReportXLSX(res, summary);
   return renderWeeklyReportPDF(res, summary);
+});
+
+// Líneas de detalle "tal cual se cargó" para cada tipo de tarea diaria.
+const CATEGORIAS_DETALLE = [
+  { key: 'llamadas', label: 'Llamadas' },
+  { key: 'visitas', label: 'Visitas' },
+  { key: 'ensayos', label: 'Ensayos' },
+  { key: 'ventas', label: 'Ventas' },
+  { key: 'cobranzas', label: 'Cobranzas' },
+];
+
+function lineasDeCategoria(key, items) {
+  if (key === 'ventas') {
+    return items.map(v => `${v.cliente}: Venta ${v.numero} — ${v.productos || 'sin productos'} — Total ${v.moneda} ${fmtMoney(v.total)}${v.observaciones ? ' — ' + v.observaciones : ''}`);
+  }
+  if (key === 'cobranzas') {
+    return items.map(c => `${c.cliente}: ${c.moneda} ${fmtMoney(c.importe)} (${c.medio_pago})${c.comprobante ? ' — comp. ' + c.comprobante : ''}${c.observaciones ? ' — ' + c.observaciones : ''}`);
+  }
+  // llamadas, visitas, ensayos: el detalle escrito tal cual se cargó
+  return items.map(a => `${a.cliente}: ${a.descripcion && a.descripcion.trim() ? a.descripcion : '(sin detalle escrito)'}${a.usuario ? ' — ' + a.usuario : ''}`);
+}
+
+function renderDailyDetailPDF(res, detail) {
+  const doc = new PDFDocument({ margin: 36, size: 'A4' });
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="tareas_diarias_${detail.lunes}_a_${detail.viernes}.pdf"`);
+  doc.pipe(res);
+
+  doc.fontSize(17).fillColor('#0f172a').text('Tareas diarias realizadas en la semana', { align: 'center' });
+  doc.fontSize(10).fillColor('#6b7280').text(`Semana del ${detail.lunes} al ${detail.viernes}`, { align: 'center' });
+  doc.moveDown(1);
+
+  for (const dia of detail.dias) {
+    if (doc.y > doc.page.height - 100) doc.addPage();
+    doc.fontSize(13).fillColor('#0f172a').text(`${dia.diaSemana} — ${dia.fecha}`);
+    doc.moveTo(36, doc.y + 2).lineTo(doc.page.width - 36, doc.y + 2).strokeColor('#d1d5db').stroke();
+    doc.moveDown(0.4);
+
+    const totalItems = CATEGORIAS_DETALLE.reduce((s, c) => s + dia[c.key].length, 0);
+    if (totalItems === 0) {
+      doc.fontSize(9).fillColor('#9ca3af').text('Sin tareas registradas este día.');
+    } else {
+      for (const cat of CATEGORIAS_DETALLE) {
+        const items = dia[cat.key];
+        if (!items.length) continue;
+        if (doc.y > doc.page.height - 60) doc.addPage();
+        doc.fontSize(10).fillColor('#374151').text(`${cat.label} (${items.length})`);
+        const lineas = lineasDeCategoria(cat.key, items);
+        doc.fontSize(9).fillColor('#111827');
+        for (const linea of lineas) {
+          if (doc.y > doc.page.height - 50) doc.addPage();
+          doc.text(`• ${linea}`, { indent: 10, width: doc.page.width - 82 });
+        }
+        doc.moveDown(0.3);
+      }
+    }
+    doc.moveDown(0.6);
+  }
+
+  doc.fontSize(7).fillColor('#9ca3af').text(`Generado el ${new Date().toISOString().slice(0, 10)}`);
+  doc.end();
+}
+
+async function renderDailyDetailXLSX(res, detail) {
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('Tareas diarias');
+
+  ws.addRow(['Tareas diarias realizadas en la semana']);
+  ws.getRow(1).font = { bold: true, size: 14 };
+  ws.addRow([`Semana del ${detail.lunes} al ${detail.viernes}`]);
+  ws.addRow([]);
+
+  const headerRowIdx = ws.rowCount + 1;
+  ws.addRow(['Día', 'Fecha', 'Categoría', 'Cliente', 'Detalle', 'Usuario / Responsable']);
+  ws.getRow(headerRowIdx).font = { bold: true };
+
+  for (const dia of detail.dias) {
+    let algo = false;
+    for (const cat of CATEGORIAS_DETALLE) {
+      const items = dia[cat.key];
+      for (const item of items) {
+        algo = true;
+        let cliente = item.cliente;
+        let detalle, responsable;
+        if (cat.key === 'ventas') {
+          detalle = `Venta ${item.numero} — ${item.productos || 'sin productos'} — Total ${item.moneda} ${item.total}${item.observaciones ? ' — ' + item.observaciones : ''}`;
+          responsable = item.vendedor;
+        } else if (cat.key === 'cobranzas') {
+          detalle = `${item.moneda} ${item.importe} (${item.medio_pago})${item.comprobante ? ' — comp. ' + item.comprobante : ''}${item.observaciones ? ' — ' + item.observaciones : ''}`;
+          responsable = item.responsable;
+        } else {
+          detalle = item.descripcion && item.descripcion.trim() ? item.descripcion : '(sin detalle escrito)';
+          responsable = item.usuario;
+        }
+        ws.addRow([dia.diaSemana, dia.fecha, cat.label, cliente, detalle, responsable || '']);
+      }
+    }
+    if (!algo) ws.addRow([dia.diaSemana, dia.fecha, '—', '', 'Sin tareas registradas este día.', '']);
+  }
+  ws.columns.forEach((col, i) => { col.width = [10, 12, 12, 26, 55, 20][i] || 20; });
+
+  const buffer = await wb.xlsx.writeBuffer();
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="tareas_diarias_${detail.lunes}_a_${detail.viernes}.xlsx"`);
+  res.send(buffer);
+}
+
+router.get('/weekly-daily-detail', async (req, res) => {
+  const format = req.query.format || 'pdf';
+  const detail = await getWeeklyDailyDetail(db, { desde: req.query.desde });
+  if (format === 'xlsx') return renderDailyDetailXLSX(res, detail);
+  return renderDailyDetailPDF(res, detail);
 });
 
 const QUERIES = {

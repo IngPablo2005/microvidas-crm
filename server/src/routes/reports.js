@@ -1,11 +1,19 @@
 import express from 'express';
 import db from '../db.js';
 import { getWeeklySummary } from '../lib/weeklySummary.js';
+import { getWeeklyDailyDetail } from '../lib/weeklyDailyDetail.js';
 
 const router = express.Router();
 
 router.get('/weekly-summary', async (req, res) => {
   res.json(await getWeeklySummary(db));
+});
+
+// Detalle día por día (Lunes a Viernes) de llamadas, visitas, ventas, cobranzas y
+// ensayos de la semana, con el texto tal cual fue cargado. Opcionalmente recibe
+// "desde" (un lunes en formato YYYY-MM-DD) para ver una semana distinta a la actual.
+router.get('/weekly-daily-detail', async (req, res) => {
+  res.json(await getWeeklyDailyDetail(db, { desde: req.query.desde }));
 });
 
 router.get('/sales-weekly', async (req, res) => {

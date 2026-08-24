@@ -4,7 +4,7 @@ import api from '../api/client.js';
 import { KpiCard, Card, Badge, fmtUSD, Loading, Button, Field, inputCls } from '../components/UI.jsx';
 import { CATEGORICAL, STATUS } from '../colors.js';
 import {
-  DollarSign, TrendingUp, FileText, Target, CheckSquare, AlertTriangle, Users, Wallet, Clock, Phone, MapPin
+  DollarSign, TrendingUp, FileText, Target, CheckSquare, AlertTriangle, Users, Wallet, Clock, Phone, MapPin, FlaskConical
 } from 'lucide-react';
 
 const STAGE_LABELS = {
@@ -137,7 +137,7 @@ export default function Dashboard() {
   );
 }
 
-const TIPOS_CONTACTO = ['Visita', 'Llamada'];
+const TIPOS_REGISTRABLES = ['Visita', 'Llamada', 'Ensayo'];
 
 function VisitasLlamadasCard() {
   const [clients, setClients] = useState([]);
@@ -148,7 +148,7 @@ function VisitasLlamadasCard() {
 
   async function loadRecientes() {
     setLoadingList(true);
-    const { data } = await api.get('/activities', { params: { tipo: TIPOS_CONTACTO.join(','), limit: 8 } });
+    const { data } = await api.get('/activities', { params: { tipo: TIPOS_REGISTRABLES.join(','), limit: 8 } });
     setRecientes(data);
     setLoadingList(false);
   }
@@ -173,7 +173,7 @@ function VisitasLlamadasCard() {
 
   return (
     <Card className="p-5">
-      <h2 className="font-semibold text-gray-800 mb-4 flex items-center gap-2"><Phone size={16} className="text-blue-500" /> Registrar visita o llamada</h2>
+      <h2 className="font-semibold text-gray-800 mb-4 flex items-center gap-2"><Phone size={16} className="text-blue-500" /> Registrar visita, llamada o ensayo</h2>
       <div className="grid md:grid-cols-2 gap-6">
         <form onSubmit={registrar} className="space-y-1">
           <Field label="Cliente *">
@@ -185,7 +185,7 @@ function VisitasLlamadasCard() {
           <div className="grid grid-cols-2 gap-3">
             <Field label="Tipo">
               <select className={inputCls} value={form.tipo} onChange={e => setForm(f => ({ ...f, tipo: e.target.value }))}>
-                {TIPOS_CONTACTO.map(t => <option key={t} value={t}>{t}</option>)}
+                {TIPOS_REGISTRABLES.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
             </Field>
             <Field label="Fecha">
@@ -203,12 +203,12 @@ function VisitasLlamadasCard() {
         <div>
           <div className="text-xs text-gray-400 uppercase font-medium mb-2">Últimas registradas</div>
           {loadingList ? <Loading /> : recientes.length === 0 ? (
-            <p className="text-sm text-gray-400">Todavía no registraste visitas ni llamadas.</p>
+            <p className="text-sm text-gray-400">Todavía no registraste visitas, llamadas ni ensayos.</p>
           ) : (
             <div className="space-y-2 max-h-64 overflow-y-auto">
               {recientes.map(r => (
                 <div key={r.id} className="flex items-start gap-2 border border-gray-100 rounded-md p-2.5">
-                  {r.tipo === 'Visita' ? <MapPin size={14} className="text-emerald-500 mt-0.5" /> : <Phone size={14} className="text-blue-500 mt-0.5" />}
+                  {r.tipo === 'Visita' ? <MapPin size={14} className="text-emerald-500 mt-0.5" /> : r.tipo === 'Ensayo' ? <FlaskConical size={14} className="text-purple-500 mt-0.5" /> : <Phone size={14} className="text-blue-500 mt-0.5" />}
                   <div className="flex-1 min-w-0">
                     <div className="text-sm text-gray-800">{r.cliente_nombre}</div>
                     <div className="text-xs text-gray-400">{r.tipo} · {new Date(r.fecha).toLocaleString('es-AR')}{r.usuario ? ` · ${r.usuario}` : ''}</div>
