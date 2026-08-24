@@ -101,8 +101,20 @@ router.get('/alerts', async (req, res) => {
   const cotAltoValor = await db.prepare(`SELECT q.id, q.numero, q.total, c.razon_social, c.id as client_id FROM quotes q JOIN clients c ON c.id = q.client_id WHERE q.estado IN ('Borrador','Enviada','En negociacion') AND q.total >= 15000`).all();
   for (const q of cotAltoValor) alerts.push({ tipo: 'Cotización de alto valor', severidad: 'media', mensaje: `Cotización ${q.numero} de ${q.razon_social} por USD ${q.total.toFixed(2)}`, client_id: q.client_id, ref: 'quotes', ref_id: q.id });
 
-  const sinContacto = await db.prepare(`SELECT id, razon_social, ultimo_contacto FROM clients WHERE estado = 'Activo' AND (ultimo_contacto IS NULL OR ultimo_contacto <= date(?, '-' || ? || ' days'))`).all(t, diasSinContacto);
-  for (const c of sinContacto) alerts.push({ tipo: 'Cliente sin contacto', severidad: 'media', mensaje: `${c.razon_social} sin contacto hace más de ${diasSinContacto} días`, client_id: c.id, ref: 'clients', ref_id: c.id });
+  // Clientes sin una llamada o visita registrada (tabla "activities", tipos Visita/Llamada)
+  // en los últimos N días configurados en Configuración ("Días sin llamadas o visitas para alertar").
+  const sinContacto = await db.prepare(`
+    SELECT * FROM (
+      SELECT c.id, c.razon_social,
+        (SELECT MAX(date(a.fecha)) FROM activities a WHERE a.client_id = c.id AND a.tipo IN ('Visita','Llamada')) as ultima_llamada_visita
+      FROM clients c WHERE c.estado = 'Activo'
+    ) t
+    WHERE ultima_llamada_visita IS NULL OR ultima_llamada_visita <= date(?, '-' || ? || ' days')
+  `).all(t, diasSinContacto);
+  for (const c of sinContacto) {
+    const detalle = c.ultima_llamada_visita ? `última: ${c.ultima_llamada_visita}` : 'nunca se registró una';
+    alerts.push({ tipo: 'Sin llamadas ni visitas', severidad: 'media', mensaje: `${c.razon_social} sin llamadas ni visitas hace más de ${diasSinContacto} días (${detalle})`, client_id: c.id, ref: 'clients', ref_id: c.id });
+  }
 
   const prospectosSinSeguimiento = await db.prepare(`SELECT id, empresa, proximo_contacto FROM prospects WHERE estado NOT IN ('Ganado','Perdido') AND proximo_contacto IS NOT NULL AND proximo_contacto < ?`).all(t);
   for (const p of prospectosSinSeguimiento) alerts.push({ tipo: 'Prospecto sin seguimiento', severidad: 'media', mensaje: `${p.empresa} — seguimiento vencido (${p.proximo_contacto})`, ref: 'prospects', ref_id: p.id });

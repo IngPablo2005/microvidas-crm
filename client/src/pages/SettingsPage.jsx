@@ -58,7 +58,7 @@ export default function SettingsPage() {
           <Field label="Objetivo mensual de ventas (USD)">
             <input type="number" className={inputCls} value={settings.objetivo_mensual_usd} onChange={e => setSettings(s => ({ ...s, objetivo_mensual_usd: e.target.value }))} />
           </Field>
-          <Field label="Días sin contacto para alertar">
+          <Field label="Días sin llamadas o visitas para alertar">
             <input type="number" className={inputCls} value={settings.dias_sin_contacto_alerta} onChange={e => setSettings(s => ({ ...s, dias_sin_contacto_alerta: e.target.value }))} />
           </Field>
           <div className="md:col-span-2"><Button type="submit">Guardar configuración</Button></div>
