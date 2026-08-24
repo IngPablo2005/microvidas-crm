@@ -21,8 +21,8 @@ router.post('/', async (req, res) => {
   const c = req.body;
   const id = (await db.prepare(`INSERT INTO collections (client_id, fecha, comprobante, factura, importe, moneda, medio_pago, fecha_vencimiento_original, responsable, observaciones)
     VALUES (?,?,?,?,?,?,?,?,?,?)`).run(
-    c.client_id, c.fecha || new Date().toISOString().slice(0, 10), c.comprobante, c.factura, c.importe || 0,
-    c.moneda || 'USD', c.medio_pago || 'Transferencia bancaria', c.fecha_vencimiento_original, c.responsable, c.observaciones
+    c.client_id, c.fecha || new Date().toISOString().slice(0, 10), c.comprobante ?? null, c.factura ?? null, c.importe || 0,
+    c.moneda || 'USD', c.medio_pago || 'Transferencia bancaria', c.fecha_vencimiento_original ?? null, c.responsable ?? null, c.observaciones ?? null
   )).lastInsertRowid;
   // Aplicar contra factura si corresponde
   if (c.invoice_id) {
@@ -86,7 +86,7 @@ router.get('/commitments', async (req, res) => {
 router.post('/commitments', async (req, res) => {
   const p = req.body;
   const id = (await db.prepare(`INSERT INTO payment_commitments (client_id, importe_comprometido, moneda, fecha_comprometida, invoice_id, responsable, observaciones, estado)
-    VALUES (?,?,?,?,?,?,?,?)`).run(p.client_id, p.importe_comprometido, p.moneda || 'USD', p.fecha_comprometida, p.invoice_id || null, p.responsable, p.observaciones, 'Pendiente')).lastInsertRowid;
+    VALUES (?,?,?,?,?,?,?,?)`).run(p.client_id, p.importe_comprometido, p.moneda || 'USD', p.fecha_comprometida ?? null, p.invoice_id || null, p.responsable ?? null, p.observaciones ?? null, 'Pendiente')).lastInsertRowid;
   await logActivity(p.client_id, 'Cobranza', `Compromiso de pago registrado por ${p.moneda || 'USD'} ${Number(p.importe_comprometido).toFixed(2)} para el ${p.fecha_comprometida}.`, p.responsable, 'payment_commitments', id);
   res.status(201).json({ id });
 });

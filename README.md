@@ -79,6 +79,8 @@ Todos los módulos de la especificación original: dashboard con KPIs y alertas 
 - **Registrar visita o llamada:** en el Dashboard hay una tarjeta "Registrar visita o llamada" para anotar rápido un contacto con un cliente (sin entrar a su ficha), con fecha y comentario opcional. Queda guardado en el historial del cliente y alimenta el reporte semanal (visitas y llamadas realizadas). Si la fecha registrada es más reciente que la que ya tenía el cliente, también actualiza su "último contacto".
 - **Editar cliente:** desde la ficha del cliente ("Editar cliente", arriba a la derecha) se puede modificar cualquier dato del perfil en cualquier momento.
 - **Cultivos y superficie sembrada:** en la ficha de cada cliente, pestaña "Cultivos", se carga la superficie (en hectáreas) de Soja, Soja 2da, Trigo, Maíz, Girasol, Sorgo, Pasturas, Vicia, Arveja, Arroz y Otros. El total se muestra también en el encabezado de la ficha.
+- **Editar ventas y cotizaciones:** al hacer clic en una venta o cotización de sus respectivos listados se abre el detalle, con un botón "Editar" que permite modificar fecha, responsable, observaciones y los productos. Cada venta o cotización admite hasta 5 productos (con nombre, cantidad y precio en U$). Si una venta editada ya tenía una factura y cobranzas registradas, el saldo pendiente se recalcula automáticamente sin perder lo ya cobrado.
+- **Reportes de ventas y cotizaciones con detalle por producto:** el botón "Exportar" de Ventas y de Cotizaciones ahora descarga un renglón por cada producto vendido/cotizado, con cantidad, precio unitario y monto en U$ (antes solo mostraba el total de la operación).
 
 ### Notificaciones y alertas de tareas/eventos programados
 

@@ -106,8 +106,10 @@ router.get('/weekly-report', async (req, res) => {
 const QUERIES = {
   clients: `SELECT id, razon_social, nombre_comercial, cuit, contacto_principal, telefono, email, provincia, localidad, estado, potencial_comercial, responsable_comercial FROM clients ORDER BY razon_social`,
   prospects: `SELECT id, empresa, contacto, telefono, email, provincia, localidad, origen, potencial_estimado, estado, responsable FROM prospects ORDER BY empresa`,
-  sales: `SELECT s.numero, c.razon_social as cliente, s.fecha, s.total, s.moneda, s.vendedor FROM sales s JOIN clients c ON c.id = s.client_id ORDER BY s.fecha DESC`,
-  quotes: `SELECT q.numero, c.razon_social as cliente, q.fecha, q.fecha_vencimiento, q.total, q.moneda, q.estado, q.responsable FROM quotes q JOIN clients c ON c.id = q.client_id ORDER BY q.fecha DESC`,
+  sales: `SELECT s.numero, c.razon_social as cliente, s.fecha, s.vendedor, si.descripcion as producto, si.cantidad, si.precio_unitario as precio_unitario_usd, si.importe as importe_usd, s.moneda, s.total as total_venta
+          FROM sales s JOIN clients c ON c.id = s.client_id LEFT JOIN sale_items si ON si.sale_id = s.id ORDER BY s.fecha DESC, s.id, si.id`,
+  quotes: `SELECT q.numero, c.razon_social as cliente, q.fecha, q.fecha_vencimiento, q.estado, q.responsable, qi.descripcion as producto, qi.cantidad, qi.precio_unitario as precio_unitario_usd, qi.importe as importe_usd, q.moneda, q.total as total_cotizacion
+          FROM quotes q JOIN clients c ON c.id = q.client_id LEFT JOIN quote_items qi ON qi.quote_id = q.id ORDER BY q.fecha DESC, q.id, qi.id`,
   tasks: `SELECT t.titulo, c.razon_social as cliente, t.fecha, t.hora, t.prioridad, t.responsable, t.estado FROM tasks t LEFT JOIN clients c ON c.id = t.client_id ORDER BY t.fecha DESC`,
   activities: `SELECT a.fecha, c.razon_social as cliente, a.tipo, a.descripcion, a.usuario FROM activities a JOIN clients c ON c.id = a.client_id ORDER BY a.fecha DESC`,
   pipeline: `SELECT po.titulo, COALESCE(c.razon_social, p.empresa) as cliente_o_prospecto, po.etapa, po.importe_estimado, po.probabilidad, po.responsable, po.fecha_cierre_estimada FROM pipeline_opportunities po LEFT JOIN clients c ON c.id = po.client_id LEFT JOIN prospects p ON p.id = po.prospect_id`,

@@ -39,7 +39,7 @@ router.get('/:id', async (req, res) => {
 router.post('/', async (req, res) => {
   const { client_id, quote_id, fecha, moneda, items, vendedor, observaciones, usuario } = req.body;
   let total = 0;
-  const computed = (items || []).map(it => {
+  const computed = (items || []).slice(0, 5).map(it => {
     const importe = Number(it.cantidad) * Number(it.precio_unitario);
     total += importe;
     return { ...it, importe };
@@ -58,7 +58,44 @@ router.post('/', async (req, res) => {
   res.status(201).json({ id, numero });
 });
 
+// Edita una venta existente: reemplaza los productos (hasta 5, validado también en el
+// frontend) y recalcula el total. Si la venta tiene una factura asociada, ajusta su
+// importe y saldo por la diferencia, preservando lo que ya se haya cobrado.
+router.put('/:id', async (req, res) => {
+  const sale = await db.prepare('SELECT * FROM sales WHERE id = ?').get(req.params.id);
+  if (!sale) return res.status(404).json({ error: 'Venta no encontrada' });
+
+  const { fecha, moneda, items, vendedor, observaciones, usuario } = req.body;
+  const itemsLimitados = (items || []).slice(0, 5);
+  let total = 0;
+  const computed = itemsLimitados.map(it => {
+    const importe = Number(it.cantidad) * Number(it.precio_unitario);
+    total += importe;
+    return { ...it, importe };
+  });
+
+  await db.prepare(`UPDATE sales SET fecha=?, moneda=?, total=?, vendedor=?, observaciones=? WHERE id=?`)
+    .run(fecha || sale.fecha, moneda || sale.moneda, total, vendedor ?? sale.vendedor, observaciones ?? sale.observaciones, req.params.id);
+
+  await db.prepare('DELETE FROM sale_items WHERE sale_id = ?').run(req.params.id);
+  const insItem = db.prepare('INSERT INTO sale_items (sale_id, product_id, descripcion, cantidad, precio_unitario, importe) VALUES (?,?,?,?,?,?)');
+  for (const it of computed) await insItem.run(req.params.id, it.product_id || null, it.descripcion, it.cantidad, it.precio_unitario, it.importe);
+
+  const invoice = await db.prepare('SELECT * FROM invoices WHERE sale_id = ?').get(req.params.id);
+  if (invoice) {
+    const pagado = invoice.importe - invoice.saldo;
+    const nuevoSaldo = Math.max(0, total - pagado);
+    const nuevoEstado = nuevoSaldo <= 0 ? 'Pagada' : (invoice.estado === 'Vencida' ? 'Vencida' : 'Pendiente');
+    await db.prepare('UPDATE invoices SET importe=?, saldo=?, estado=? WHERE id=?').run(total, nuevoSaldo, nuevoEstado, invoice.id);
+  }
+
+  await logActivity(sale.client_id, 'Venta', `Venta ${sale.numero} editada. Nuevo total: ${moneda || sale.moneda} ${total.toFixed(2)}.`, usuario, 'sales', sale.id);
+  res.json({ ok: true, total });
+});
+
 router.delete('/:id', async (req, res) => {
+  await db.prepare('DELETE FROM sale_items WHERE sale_id = ?').run(req.params.id);
+  await db.prepare('DELETE FROM invoices WHERE sale_id = ?').run(req.params.id);
   await db.prepare('DELETE FROM sales WHERE id = ?').run(req.params.id);
   res.json({ ok: true });
 });

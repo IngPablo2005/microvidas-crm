@@ -6,7 +6,7 @@ const router = express.Router();
 
 function computeTotals(items, descuentoGeneral = 0) {
   let subtotal = 0;
-  const computed = items.map(it => {
+  const computed = (items || []).slice(0, 5).map(it => {
     const importe = Number(it.cantidad) * Number(it.precio_unitario) * (1 - (Number(it.descuento) || 0) / 100);
     subtotal += importe;
     return { ...it, importe };
@@ -48,14 +48,32 @@ router.post('/', async (req, res) => {
   res.status(201).json({ id, numero });
 });
 
+// Edita una cotización existente: reemplaza los productos (hasta 5) y recalcula
+// totales. Cualquier campo del header que no se envíe conserva su valor anterior
+// (evita que falte un campo y la actualización falle).
 router.put('/:id', async (req, res) => {
-  const { fecha, fecha_vencimiento, moneda, descuento_general, items, probabilidad_cierre, responsable, observaciones, usuario, client_id } = req.body;
-  const { computed, subtotal, total } = computeTotals(items || [], descuento_general);
+  const quote = await db.prepare('SELECT * FROM quotes WHERE id = ?').get(req.params.id);
+  if (!quote) return res.status(404).json({ error: 'Cotización no encontrada' });
+
+  const { fecha, fecha_vencimiento, moneda, descuento_general, items, probabilidad_cierre, responsable, observaciones, usuario } = req.body;
+  const { computed, subtotal, total } = computeTotals(items || [], descuento_general ?? quote.descuento_general);
+
   await db.prepare(`UPDATE quotes SET fecha=?, fecha_vencimiento=?, moneda=?, descuento_general=?, subtotal=?, total=?, probabilidad_cierre=?, responsable=?, observaciones=?, updated_at=datetime('now') WHERE id=?`)
-    .run(fecha, fecha_vencimiento, moneda, descuento_general || 0, subtotal, total, probabilidad_cierre, responsable, observaciones, req.params.id);
+    .run(
+      fecha || quote.fecha,
+      fecha_vencimiento ?? quote.fecha_vencimiento,
+      moneda || quote.moneda,
+      descuento_general ?? quote.descuento_general ?? 0,
+      subtotal, total,
+      probabilidad_cierre ?? quote.probabilidad_cierre,
+      responsable ?? quote.responsable,
+      observaciones ?? quote.observaciones,
+      req.params.id
+    );
   await db.prepare('DELETE FROM quote_items WHERE quote_id = ?').run(req.params.id);
   const insItem = db.prepare('INSERT INTO quote_items (quote_id, product_id, descripcion, cantidad, precio_unitario, descuento, importe) VALUES (?,?,?,?,?,?,?)');
   for (const it of computed) await insItem.run(req.params.id, it.product_id || null, it.descripcion, it.cantidad, it.precio_unitario, it.descuento || 0, it.importe);
+  await logActivity(quote.client_id, 'Cotizacion', `Cotización ${quote.numero} editada. Nuevo total: ${moneda || quote.moneda} ${total.toFixed(2)}.`, usuario, 'quotes', quote.id);
   res.json({ ok: true, subtotal, total });
 });
 
@@ -88,6 +106,7 @@ router.post('/:id/convert-to-sale', async (req, res) => {
 });
 
 router.delete('/:id', async (req, res) => {
+  await db.prepare('DELETE FROM quote_items WHERE quote_id = ?').run(req.params.id);
   await db.prepare('DELETE FROM quotes WHERE id = ?').run(req.params.id);
   res.json({ ok: true });
 });

@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import api from '../api/client.js';
 import { Card, Badge, Button, Modal, Field, inputCls, Loading, EmptyState, fmtUSD, fmtDate } from '../components/UI.jsx';
-import { Plus, Download } from 'lucide-react';
+import { Plus, Download, Pencil } from 'lucide-react';
 
 const ESTADOS = ['Borrador', 'Enviada', 'En negociacion', 'Aceptada', 'Rechazada', 'Vencida'];
+const MAX_ITEMS = 5;
 
 export default function Quotes() {
   const [params] = useSearchParams();
@@ -15,6 +16,7 @@ export default function Quotes() {
   const [estado, setEstado] = useState('');
   const [showNew, setShowNew] = useState(!!params.get('client_id'));
   const [detail, setDetail] = useState(null);
+  const [editing, setEditing] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -46,6 +48,7 @@ export default function Quotes() {
   async function openDetail(id) {
     const { data } = await api.get(`/quotes/${id}`);
     setDetail(data);
+    setEditing(false);
   }
 
   return (
@@ -107,7 +110,7 @@ export default function Quotes() {
         />
       )}
 
-      {detail && (
+      {detail && !editing && (
         <Modal open onClose={() => setDetail(null)} title={`Cotización ${detail.numero}`} width="max-w-2xl">
           <div className="space-y-3">
             <div className="flex justify-between text-sm">
@@ -118,7 +121,7 @@ export default function Quotes() {
               <Badge text={detail.estado} />
             </div>
             <table className="w-full text-sm">
-              <thead className="text-xs text-gray-400 uppercase"><tr><th className="text-left py-1">Producto</th><th className="text-right py-1">Cant.</th><th className="text-right py-1">Precio</th><th className="text-right py-1">Desc.</th><th className="text-right py-1">Importe</th></tr></thead>
+              <thead className="text-xs text-gray-400 uppercase"><tr><th className="text-left py-1">Producto</th><th className="text-right py-1">Cant.</th><th className="text-right py-1">Precio (U$)</th><th className="text-right py-1">Desc.</th><th className="text-right py-1">Importe (U$)</th></tr></thead>
               <tbody>
                 {detail.items.map(it => (
                   <tr key={it.id} className="border-t border-gray-50">
@@ -134,6 +137,7 @@ export default function Quotes() {
             <div className="text-right font-semibold">Total: {fmtUSD(detail.total)}</div>
             {detail.observaciones && <div className="text-sm text-gray-500 italic">{detail.observaciones}</div>}
             <div className="flex flex-wrap gap-2 justify-end pt-2 border-t border-gray-100">
+              <Button variant="secondary" onClick={() => setEditing(true)}><Pencil size={13} className="inline mr-1" /> Editar cotización</Button>
               {ESTADOS.filter(s => s !== detail.estado).map(s => (
                 <Button key={s} variant="secondary" onClick={() => changeStatus(detail.id, s)}>Marcar {s}</Button>
               ))}
@@ -142,21 +146,36 @@ export default function Quotes() {
           </div>
         </Modal>
       )}
+
+      {detail && editing && (
+        <QuoteFormModal
+          clients={clients}
+          products={products}
+          editingQuote={detail}
+          onClose={() => setEditing(false)}
+          onSaved={() => { setEditing(false); setDetail(null); load(); }}
+        />
+      )}
     </div>
   );
 }
 
-function QuoteFormModal({ clients, products, defaultClientId, onClose, onSaved }) {
-  const [clientId, setClientId] = useState(defaultClientId || '');
-  const [fechaVencimiento, setFechaVencimiento] = useState('');
-  const [responsable, setResponsable] = useState('');
-  const [observaciones, setObservaciones] = useState('');
-  const [items, setItems] = useState([{ product_id: '', descripcion: '', cantidad: 1, precio_unitario: 0, descuento: 0 }]);
+function QuoteFormModal({ clients, products, defaultClientId, editingQuote, onClose, onSaved }) {
+  const isEditing = !!editingQuote;
+  const [clientId, setClientId] = useState(editingQuote?.client_id || defaultClientId || '');
+  const [fechaVencimiento, setFechaVencimiento] = useState(editingQuote?.fecha_vencimiento?.slice(0, 10) || '');
+  const [responsable, setResponsable] = useState(editingQuote?.responsable || '');
+  const [observaciones, setObservaciones] = useState(editingQuote?.observaciones || '');
+  const [items, setItems] = useState(
+    editingQuote?.items?.length
+      ? editingQuote.items.map(it => ({ product_id: it.product_id || '', descripcion: it.descripcion, cantidad: it.cantidad, precio_unitario: it.precio_unitario, descuento: it.descuento || 0 }))
+      : [{ product_id: '', descripcion: '', cantidad: 1, precio_unitario: 0, descuento: 0 }]
+  );
 
   function updateItem(i, patch) {
     setItems(prev => prev.map((it, idx) => idx === i ? { ...it, ...patch } : it));
   }
-  function addItem() { setItems(prev => [...prev, { product_id: '', descripcion: '', cantidad: 1, precio_unitario: 0, descuento: 0 }]); }
+  function addItem() { if (items.length < MAX_ITEMS) setItems(prev => [...prev, { product_id: '', descripcion: '', cantidad: 1, precio_unitario: 0, descuento: 0 }]); }
   function removeItem(i) { setItems(prev => prev.filter((_, idx) => idx !== i)); }
   function selectProduct(i, productId) {
     const prod = products.find(p => String(p.id) === productId);
@@ -164,30 +183,39 @@ function QuoteFormModal({ clients, products, defaultClientId, onClose, onSaved }
   }
 
   const total = items.reduce((s, it) => s + (Number(it.cantidad) * Number(it.precio_unitario) * (1 - (Number(it.descuento) || 0) / 100)), 0);
+  const clienteActual = clients.find(c => String(c.id) === String(clientId));
 
   async function save(e) {
     e.preventDefault();
     if (!clientId) return alert('Seleccioná un cliente');
-    await api.post('/quotes', { client_id: clientId, fecha_vencimiento: fechaVencimiento, items, responsable, observaciones, usuario: 'Usuario' });
+    if (isEditing) {
+      await api.put(`/quotes/${editingQuote.id}`, { fecha_vencimiento: fechaVencimiento, items, responsable, observaciones, usuario: 'Usuario' });
+    } else {
+      await api.post('/quotes', { client_id: clientId, fecha_vencimiento: fechaVencimiento, items, responsable, observaciones, usuario: 'Usuario' });
+    }
     onSaved();
   }
 
   return (
-    <Modal open onClose={onClose} title="Nueva cotización" width="max-w-3xl">
+    <Modal open onClose={onClose} title={isEditing ? `Editar cotización ${editingQuote.numero}` : 'Nueva cotización'} width="max-w-3xl">
       <form onSubmit={save}>
         <div className="grid grid-cols-3 gap-3">
           <Field label="Cliente *">
-            <select required className={inputCls} value={clientId} onChange={e => setClientId(e.target.value)}>
-              <option value="">Seleccionar...</option>
-              {clients.map(c => <option key={c.id} value={c.id}>{c.razon_social}</option>)}
-            </select>
+            {isEditing ? (
+              <input disabled className={inputCls + ' bg-gray-50 text-gray-500'} value={clienteActual?.razon_social || editingQuote.cliente_nombre || ''} />
+            ) : (
+              <select required className={inputCls} value={clientId} onChange={e => setClientId(e.target.value)}>
+                <option value="">Seleccionar...</option>
+                {clients.map(c => <option key={c.id} value={c.id}>{c.razon_social}</option>)}
+              </select>
+            )}
           </Field>
           <Field label="Vencimiento"><input type="date" className={inputCls} value={fechaVencimiento} onChange={e => setFechaVencimiento(e.target.value)} /></Field>
           <Field label="Responsable"><input className={inputCls} value={responsable} onChange={e => setResponsable(e.target.value)} /></Field>
         </div>
 
         <div className="mt-2">
-          <div className="text-xs font-medium text-gray-600 mb-1">Productos</div>
+          <div className="text-xs font-medium text-gray-600 mb-1">Productos (hasta {MAX_ITEMS})</div>
           <div className="space-y-2">
             {items.map((it, i) => (
               <div key={i} className="grid grid-cols-12 gap-2 items-center">
@@ -203,7 +231,11 @@ function QuoteFormModal({ clients, products, defaultClientId, onClose, onSaved }
               </div>
             ))}
           </div>
-          <button type="button" onClick={addItem} className="text-xs text-blue-600 mt-2 hover:underline">+ Agregar producto</button>
+          {items.length < MAX_ITEMS ? (
+            <button type="button" onClick={addItem} className="text-xs text-blue-600 mt-2 hover:underline">+ Agregar producto</button>
+          ) : (
+            <div className="text-xs text-gray-400 mt-2">Máximo {MAX_ITEMS} productos por cotización.</div>
+          )}
         </div>
 
         <Field label="Observaciones"><textarea className={inputCls} rows={2} value={observaciones} onChange={e => setObservaciones(e.target.value)} /></Field>
@@ -212,7 +244,7 @@ function QuoteFormModal({ clients, products, defaultClientId, onClose, onSaved }
 
         <div className="flex justify-end gap-2 mt-3">
           <Button variant="secondary" type="button" onClick={onClose}>Cancelar</Button>
-          <Button type="submit">Crear cotización</Button>
+          <Button type="submit">{isEditing ? 'Guardar cambios' : 'Crear cotización'}</Button>
         </div>
       </form>
     </Modal>
