@@ -4,13 +4,14 @@ import api from '../../api/client.js';
 import { Card, Badge, Button, Modal, Field, inputCls, Loading, EmptyState, fmtUSD, fmtDate } from '../../components/UI.jsx';
 import {
   StickyNote, CheckSquare, FileText, ShoppingCart, Award, Image as ImageIcon, CalendarPlus, Phone, Mail,
-  MessageCircle, Users as UsersIcon, ArrowLeft, Trash2, Pencil
+  MessageCircle, Users as UsersIcon, ArrowLeft, Trash2, Pencil, Sprout
 } from 'lucide-react';
 
 const ESTADOS_CLIENTE = ['Activo', 'Inactivo', 'Perdido'];
 const POTENCIALES_CLIENTE = ['Alto', 'Medio', 'Bajo'];
+const CULTIVOS = ['Soja', 'Soja 2da', 'Trigo', 'Maíz', 'Girasol', 'Sorgo', 'Pasturas', 'Vicia', 'Arveja', 'Arroz', 'Otros'];
 
-const TABS = ['Resumen', 'Historial', 'Hitos', 'Contactos', 'Cobranzas', 'Documentos'];
+const TABS = ['Resumen', 'Historial', 'Hitos', 'Contactos', 'Cultivos', 'Cobranzas', 'Documentos'];
 
 export default function ClientDetail() {
   const { id } = useParams();
@@ -21,24 +22,27 @@ export default function ClientDetail() {
   const [milestones, setMilestones] = useState([]);
   const [attachments, setAttachments] = useState([]);
   const [account, setAccount] = useState(null);
+  const [crops, setCrops] = useState([]);
   const [modal, setModal] = useState(null);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [c, tl, ms, att, acc] = await Promise.all([
+    const [c, tl, ms, att, acc, cr] = await Promise.all([
       api.get(`/clients/${id}`),
       api.get(`/clients/${id}/timeline`),
       api.get(`/clients/${id}/milestones`),
       api.get(`/clients/${id}/attachments`),
       api.get(`/collections/account/${id}`),
+      api.get(`/clients/${id}/crops`),
     ]);
     setClient(c.data);
     setTimeline(tl.data);
     setMilestones(ms.data);
     setAttachments(att.data);
     setAccount(acc.data);
+    setCrops(cr.data);
     setLoading(false);
   }, [id]);
 
@@ -87,7 +91,10 @@ export default function ClientDetail() {
               {client.email && <span className="flex items-center gap-1"><Mail size={13} /> {client.email}</span>}
               {client.whatsapp && <span className="flex items-center gap-1"><MessageCircle size={13} /> {client.whatsapp}</span>}
             </div>
-            <div className="text-xs text-gray-400 mt-2">Responsable: {client.responsable_comercial || '—'} · Último contacto: {fmtDate(client.ultimo_contacto)} · Próximo: {fmtDate(client.proximo_contacto)}</div>
+            <div className="text-xs text-gray-400 mt-2">
+              Responsable: {client.responsable_comercial || '—'} · Último contacto: {fmtDate(client.ultimo_contacto)} · Próximo: {fmtDate(client.proximo_contacto)}
+              {crops.some(c => c.hectareas > 0) && <> · Superficie: {crops.reduce((s, c) => s + c.hectareas, 0).toLocaleString('es-AR')} ha</>}
+            </div>
             {client.observaciones && <div className="text-sm text-gray-500 mt-2 italic">"{client.observaciones}"</div>}
           </div>
           <div className="flex flex-wrap gap-2 max-w-xs justify-end">
@@ -96,6 +103,7 @@ export default function ClientDetail() {
             <QuickAction icon={FileText} label="Nueva cotización" onClick={() => navigate(`/cotizaciones?client_id=${id}`)} />
             <QuickAction icon={ShoppingCart} label="Registrar venta" onClick={() => navigate(`/ventas?client_id=${id}`)} />
             <QuickAction icon={Award} label="Agregar hito" onClick={() => setModal('hito')} />
+            <QuickAction icon={Sprout} label="Cargar cultivos" onClick={() => setTab('Cultivos')} />
             <QuickAction icon={ImageIcon} label="Subir archivo" onClick={() => setModal('archivo')} />
             <QuickAction icon={CalendarPlus} label="Programar reunión" onClick={() => setModal('reunion')} />
           </div>
@@ -114,6 +122,7 @@ export default function ClientDetail() {
       {tab === 'Historial' && <HistorialTab timeline={timeline} />}
       {tab === 'Hitos' && <HitosTab milestones={milestones} />}
       {tab === 'Contactos' && <ContactosTab client={client} onChange={load} />}
+      {tab === 'Cultivos' && <CultivosTab crops={crops} clientId={id} onChange={load} />}
       {tab === 'Cobranzas' && <CobranzasTab account={account} clientId={id} onChange={load} />}
       {tab === 'Documentos' && <DocumentosTab attachments={attachments} clientId={id} onChange={load} />}
 
@@ -273,6 +282,75 @@ function ContactosTab({ client, onChange }) {
         </form>
       </Modal>
     </Card>
+  );
+}
+
+function CultivosTab({ crops, clientId, onChange }) {
+  const [showEdit, setShowEdit] = useState(false);
+  const sembradas = crops.filter(c => c.hectareas > 0);
+  const total = crops.reduce((s, c) => s + c.hectareas, 0);
+
+  return (
+    <Card className="p-5">
+      <div className="flex justify-between mb-3">
+        <div>
+          <div className="text-sm font-semibold text-gray-700">Cultivos y superficie sembrada</div>
+          <div className="text-xs text-gray-400">Total: {total.toLocaleString('es-AR')} ha</div>
+        </div>
+        <Button onClick={() => setShowEdit(true)}>{sembradas.length ? 'Editar cultivos' : '+ Cargar cultivos'}</Button>
+      </div>
+      {sembradas.length === 0 ? <EmptyState text="Todavía no se cargó la superficie sembrada de este cliente." /> : (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {sembradas.map(c => (
+            <div key={c.cultivo} className="border border-gray-100 rounded-md p-3">
+              <div className="text-xs text-gray-400">{c.cultivo}</div>
+              <div className="text-lg font-semibold text-gray-800">{c.hectareas.toLocaleString('es-AR')} ha</div>
+            </div>
+          ))}
+        </div>
+      )}
+      {showEdit && <EditCropsModal crops={crops} clientId={clientId} onClose={() => setShowEdit(false)} onSaved={onChange} />}
+    </Card>
+  );
+}
+
+function EditCropsModal({ crops, clientId, onClose, onSaved }) {
+  const initial = Object.fromEntries(CULTIVOS.map(c => [c, crops.find(x => x.cultivo === c)?.hectareas || '']));
+  const [form, setForm] = useState(initial);
+  const [saving, setSaving] = useState(false);
+
+  async function save(e) {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await api.put(`/clients/${clientId}/crops`, { crops: form });
+      onSaved();
+      onClose();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose} title="Cultivos y superficie sembrada (hectáreas)" width="max-w-2xl">
+      <form onSubmit={save}>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          {CULTIVOS.map(cultivo => (
+            <Field key={cultivo} label={cultivo}>
+              <input
+                type="number" min="0" step="0.1" placeholder="0" className={inputCls}
+                value={form[cultivo]}
+                onChange={e => setForm(f => ({ ...f, [cultivo]: e.target.value }))}
+              />
+            </Field>
+          ))}
+        </div>
+        <div className="flex justify-end gap-2 mt-3">
+          <Button variant="secondary" type="button" onClick={onClose}>Cancelar</Button>
+          <Button type="submit" disabled={saving}>{saving ? 'Guardando...' : 'Guardar'}</Button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 

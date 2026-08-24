@@ -325,11 +325,21 @@ CREATE TABLE IF NOT EXISTS notifications (
   created_at TEXT DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS client_crops (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  cultivo TEXT NOT NULL, -- Soja, Soja 2da, Trigo, Maíz, Girasol, Sorgo, Pasturas, Vicia, Arveja, Arroz, Otros
+  hectareas REAL DEFAULT 0,
+  updated_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(client_id, cultivo)
+);
+
 CREATE INDEX IF NOT EXISTS idx_activities_client ON activities(client_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_fecha ON tasks(fecha);
 CREATE INDEX IF NOT EXISTS idx_sales_fecha ON sales(fecha);
 CREATE INDEX IF NOT EXISTS idx_collections_client ON collections(client_id);
 CREATE INDEX IF NOT EXISTS idx_invoices_client ON invoices(client_id);
+CREATE INDEX IF NOT EXISTS idx_client_crops_client ON client_crops(client_id);
 `);
 
   // Migraciones ligeras para bases ya existentes (creadas antes de agregar estas columnas)

@@ -8,7 +8,7 @@ const d = (offset, fmt = 'YYYY-MM-DD') => today.add(offset, 'day').format(fmt);
 async function clearAll() {
   const tables = ['notifications','settings','payment_commitments','invoices','collections','notes','attachments',
     'milestones','activities','calendar_events','tasks','sale_items','sales','quote_items','quotes',
-    'pipeline_opportunities','products','prospects','contacts','clients','users'];
+    'pipeline_opportunities','products','prospects','contacts','client_crops','clients','users'];
   for (const t of tables) await db.exec(`DELETE FROM ${t}`);
 }
 
@@ -19,7 +19,7 @@ async function clearAll() {
 async function clearBusinessData() {
   const tables = ['notifications','payment_commitments','invoices','collections','notes','attachments',
     'milestones','activities','calendar_events','tasks','sale_items','sales','quote_items','quotes',
-    'pipeline_opportunities','products','prospects','contacts','clients'];
+    'pipeline_opportunities','products','prospects','contacts','client_crops','clients'];
   for (const t of tables) await db.exec(`DELETE FROM ${t}`);
 }
 

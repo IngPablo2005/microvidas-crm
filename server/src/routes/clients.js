@@ -74,6 +74,32 @@ router.post('/:id/attachments', upload.single('file'), async (req, res) => {
   res.status(201).json({ id, filename: req.file.filename });
 });
 
+// Superficie sembrada por cultivo. Lista fija de cultivos: siempre se devuelven los 11,
+// con 0 hectáreas para los que el cliente todavía no cargó.
+const CULTIVOS = ['Soja', 'Soja 2da', 'Trigo', 'Maíz', 'Girasol', 'Sorgo', 'Pasturas', 'Vicia', 'Arveja', 'Arroz', 'Otros'];
+
+router.get('/:id/crops', async (req, res) => {
+  const rows = await db.prepare('SELECT cultivo, hectareas FROM client_crops WHERE client_id = ?').all(req.params.id);
+  const byName = Object.fromEntries(rows.map(r => [r.cultivo, r.hectareas]));
+  res.json(CULTIVOS.map(cultivo => ({ cultivo, hectareas: byName[cultivo] || 0 })));
+});
+
+router.put('/:id/crops', async (req, res) => {
+  const { crops } = req.body;
+  if (!crops || typeof crops !== 'object') return res.status(400).json({ error: 'Falta el detalle de cultivos' });
+  for (const cultivo of CULTIVOS) {
+    const hectareas = Number(crops[cultivo]) || 0;
+    if (hectareas > 0) {
+      await db.prepare(`INSERT INTO client_crops (client_id, cultivo, hectareas, updated_at) VALUES (?,?,?,datetime('now'))
+        ON CONFLICT(client_id, cultivo) DO UPDATE SET hectareas = excluded.hectareas, updated_at = datetime('now')`)
+        .run(req.params.id, cultivo, hectareas);
+    } else {
+      await db.prepare('DELETE FROM client_crops WHERE client_id = ? AND cultivo = ?').run(req.params.id, cultivo);
+    }
+  }
+  res.json({ ok: true });
+});
+
 router.get('/:id/contacts', async (req, res) => {
   res.json(await db.prepare('SELECT * FROM contacts WHERE client_id = ?').all(req.params.id));
 });
@@ -159,6 +185,7 @@ router.delete('/:id', async (req, res) => {
 
   await db.prepare('DELETE FROM pipeline_opportunities WHERE client_id = ?').run(clientId);
   await db.prepare('DELETE FROM contacts WHERE client_id = ?').run(clientId);
+  await db.prepare('DELETE FROM client_crops WHERE client_id = ?').run(clientId);
   await db.prepare('UPDATE prospects SET converted_client_id = NULL WHERE converted_client_id = ?').run(clientId);
 
   await db.prepare('DELETE FROM clients WHERE id = ?').run(clientId);

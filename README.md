@@ -77,6 +77,8 @@ Todos los módulos de la especificación original: dashboard con KPIs y alertas 
 
 - **Eliminar cliente:** desde el listado de Clientes (ícono de tacho en cada fila) o desde la ficha del cliente ("Eliminar cliente", arriba a la derecha). Pide confirmación porque es irreversible: borra también todas sus ventas, cotizaciones, cobranzas, facturas, tareas, notas, hitos, adjuntos y oportunidades de pipeline asociadas, para no dejar datos sueltos en otros módulos.
 - **Registrar visita o llamada:** en el Dashboard hay una tarjeta "Registrar visita o llamada" para anotar rápido un contacto con un cliente (sin entrar a su ficha), con fecha y comentario opcional. Queda guardado en el historial del cliente y alimenta el reporte semanal (visitas y llamadas realizadas). Si la fecha registrada es más reciente que la que ya tenía el cliente, también actualiza su "último contacto".
+- **Editar cliente:** desde la ficha del cliente ("Editar cliente", arriba a la derecha) se puede modificar cualquier dato del perfil en cualquier momento.
+- **Cultivos y superficie sembrada:** en la ficha de cada cliente, pestaña "Cultivos", se carga la superficie (en hectáreas) de Soja, Soja 2da, Trigo, Maíz, Girasol, Sorgo, Pasturas, Vicia, Arveja, Arroz y Otros. El total se muestra también en el encabezado de la ficha.
 
 ### Notificaciones y alertas de tareas/eventos programados
 
