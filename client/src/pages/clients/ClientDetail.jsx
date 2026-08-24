@@ -4,8 +4,11 @@ import api from '../../api/client.js';
 import { Card, Badge, Button, Modal, Field, inputCls, Loading, EmptyState, fmtUSD, fmtDate } from '../../components/UI.jsx';
 import {
   StickyNote, CheckSquare, FileText, ShoppingCart, Award, Image as ImageIcon, CalendarPlus, Phone, Mail,
-  MessageCircle, Users as UsersIcon, ArrowLeft, Trash2
+  MessageCircle, Users as UsersIcon, ArrowLeft, Trash2, Pencil
 } from 'lucide-react';
+
+const ESTADOS_CLIENTE = ['Activo', 'Inactivo', 'Perdido'];
+const POTENCIALES_CLIENTE = ['Alto', 'Medio', 'Bajo'];
 
 const TABS = ['Resumen', 'Historial', 'Hitos', 'Contactos', 'Cobranzas', 'Documentos'];
 
@@ -59,9 +62,14 @@ export default function ClientDetail() {
         <button onClick={() => navigate('/clientes')} className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1">
           <ArrowLeft size={14} /> Volver a clientes
         </button>
-        <button onClick={() => setModal('eliminar')} className="text-sm text-red-500 hover:text-red-700 flex items-center gap-1">
-          <Trash2 size={14} /> Eliminar cliente
-        </button>
+        <div className="flex items-center gap-4">
+          <button onClick={() => setModal('editar')} className="text-sm text-blue-500 hover:text-blue-700 flex items-center gap-1">
+            <Pencil size={14} /> Editar cliente
+          </button>
+          <button onClick={() => setModal('eliminar')} className="text-sm text-red-500 hover:text-red-700 flex items-center gap-1">
+            <Trash2 size={14} /> Eliminar cliente
+          </button>
+        </div>
       </div>
 
       <Card className="p-5">
@@ -114,6 +122,7 @@ export default function ClientDetail() {
       {modal === 'hito' && <MilestoneModal clientId={id} onClose={() => setModal(null)} onSaved={load} />}
       {modal === 'archivo' && <FileModal clientId={id} onClose={() => setModal(null)} onSaved={load} />}
       {modal === 'reunion' && <MeetingModal clientId={id} onClose={() => setModal(null)} onSaved={load} />}
+      {modal === 'editar' && <EditClientModal client={client} onClose={() => setModal(null)} onSaved={load} />}
 
       <Modal open={modal === 'eliminar'} onClose={() => setModal(null)} title="Eliminar cliente">
         <p className="text-sm text-gray-600">
@@ -440,6 +449,92 @@ function MeetingModal({ clientId, onClose, onSaved }) {
         </Field>
         <Field label="Descripción"><textarea className={inputCls} rows={2} value={form.descripcion} onChange={e => setForm(f => ({ ...f, descripcion: e.target.value }))} /></Field>
         <div className="flex justify-end gap-2 mt-3"><Button variant="secondary" type="button" onClick={onClose}>Cancelar</Button><Button type="submit">Programar</Button></div>
+      </form>
+    </Modal>
+  );
+}
+
+function EditClientModal({ client, onClose, onSaved }) {
+  const [form, setForm] = useState({
+    razon_social: client.razon_social || '',
+    nombre_comercial: client.nombre_comercial || '',
+    cuit: client.cuit || '',
+    contacto_principal: client.contacto_principal || '',
+    cargo: client.cargo || '',
+    telefono: client.telefono || '',
+    whatsapp: client.whatsapp || '',
+    email: client.email || '',
+    provincia: client.provincia || '',
+    localidad: client.localidad || '',
+    direccion: client.direccion || '',
+    tipo_cliente: client.tipo_cliente || '',
+    segmento: client.segmento || '',
+    estado: client.estado || 'Activo',
+    potencial_comercial: client.potencial_comercial || 'Medio',
+    responsable_comercial: client.responsable_comercial || '',
+    ultimo_contacto: client.ultimo_contacto || '',
+    proximo_contacto: client.proximo_contacto || '',
+    observaciones: client.observaciones || '',
+  });
+  const [saving, setSaving] = useState(false);
+
+  function set(field) {
+    return e => setForm(f => ({ ...f, [field]: e.target.value }));
+  }
+
+  async function save(e) {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await api.put(`/clients/${client.id}`, {
+        ...form,
+        ultimo_contacto: form.ultimo_contacto || null,
+        proximo_contacto: form.proximo_contacto || null,
+        usuario: 'Usuario',
+      });
+      onSaved();
+      onClose();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose} title="Editar cliente" width="max-w-2xl">
+      <form onSubmit={save} className="grid grid-cols-2 gap-x-4">
+        <Field label="Razón social *"><input required className={inputCls} value={form.razon_social} onChange={set('razon_social')} /></Field>
+        <Field label="Nombre comercial"><input className={inputCls} value={form.nombre_comercial} onChange={set('nombre_comercial')} /></Field>
+        <Field label="CUIT"><input className={inputCls} value={form.cuit} onChange={set('cuit')} /></Field>
+        <Field label="Contacto principal"><input className={inputCls} value={form.contacto_principal} onChange={set('contacto_principal')} /></Field>
+        <Field label="Cargo"><input className={inputCls} value={form.cargo} onChange={set('cargo')} /></Field>
+        <Field label="Teléfono"><input className={inputCls} value={form.telefono} onChange={set('telefono')} /></Field>
+        <Field label="WhatsApp"><input className={inputCls} value={form.whatsapp} onChange={set('whatsapp')} /></Field>
+        <Field label="Email"><input type="email" className={inputCls} value={form.email} onChange={set('email')} /></Field>
+        <Field label="Provincia"><input className={inputCls} value={form.provincia} onChange={set('provincia')} /></Field>
+        <Field label="Localidad"><input className={inputCls} value={form.localidad} onChange={set('localidad')} /></Field>
+        <Field label="Dirección"><input className={inputCls} value={form.direccion} onChange={set('direccion')} /></Field>
+        <Field label="Tipo de cliente"><input className={inputCls} value={form.tipo_cliente} onChange={set('tipo_cliente')} /></Field>
+        <Field label="Segmento"><input className={inputCls} value={form.segmento} onChange={set('segmento')} /></Field>
+        <Field label="Potencial comercial">
+          <select className={inputCls} value={form.potencial_comercial} onChange={set('potencial_comercial')}>
+            {POTENCIALES_CLIENTE.map(p => <option key={p} value={p}>{p}</option>)}
+          </select>
+        </Field>
+        <Field label="Estado">
+          <select className={inputCls} value={form.estado} onChange={set('estado')}>
+            {ESTADOS_CLIENTE.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </Field>
+        <Field label="Responsable comercial"><input className={inputCls} value={form.responsable_comercial} onChange={set('responsable_comercial')} /></Field>
+        <Field label="Último contacto"><input type="date" className={inputCls} value={form.ultimo_contacto || ''} onChange={set('ultimo_contacto')} /></Field>
+        <Field label="Próximo contacto"><input type="date" className={inputCls} value={form.proximo_contacto || ''} onChange={set('proximo_contacto')} /></Field>
+        <div className="col-span-2">
+          <Field label="Observaciones"><textarea className={inputCls} rows={3} value={form.observaciones} onChange={set('observaciones')} /></Field>
+        </div>
+        <div className="col-span-2 flex justify-end gap-2 mt-2">
+          <Button variant="secondary" type="button" onClick={onClose}>Cancelar</Button>
+          <Button type="submit" disabled={saving}>{saving ? 'Guardando...' : 'Guardar cambios'}</Button>
+        </div>
       </form>
     </Modal>
   );
