@@ -1,6 +1,7 @@
 import express from 'express';
 import ExcelJS from 'exceljs';
 import PDFDocument from 'pdfkit';
+import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from 'docx';
 import db from '../db.js';
 import { getWeeklySummary } from '../lib/weeklySummary.js';
 import { getWeeklyDailyDetail } from '../lib/weeklyDailyDetail.js';
@@ -109,19 +110,23 @@ const CATEGORIAS_DETALLE = [
   { key: 'llamadas', label: 'Llamadas' },
   { key: 'visitas', label: 'Visitas' },
   { key: 'ensayos', label: 'Ensayos' },
+  { key: 'cotizaciones', label: 'Cotizaciones' },
   { key: 'ventas', label: 'Ventas' },
   { key: 'cobranzas', label: 'Cobranzas' },
 ];
 
 function lineasDeCategoria(key, items) {
+  if (key === 'cotizaciones') {
+    return items.map(q => `${q.cliente}: Cotización ${q.numero} (${q.estado}) — ${q.productos || 'sin productos'} — Total ${q.moneda} ${fmtMoney(q.total)}${q.observaciones ? ' — ' + q.observaciones : ''}`);
+  }
   if (key === 'ventas') {
     return items.map(v => `${v.cliente}: Venta ${v.numero} — ${v.productos || 'sin productos'} — Total ${v.moneda} ${fmtMoney(v.total)}${v.observaciones ? ' — ' + v.observaciones : ''}`);
   }
   if (key === 'cobranzas') {
     return items.map(c => `${c.cliente}: ${c.moneda} ${fmtMoney(c.importe)} (${c.medio_pago})${c.comprobante ? ' — comp. ' + c.comprobante : ''}${c.observaciones ? ' — ' + c.observaciones : ''}`);
   }
-  // llamadas, visitas, ensayos: el detalle escrito tal cual se cargó
-  return items.map(a => `${a.cliente}: ${a.descripcion && a.descripcion.trim() ? a.descripcion : '(sin detalle escrito)'}${a.usuario ? ' — ' + a.usuario : ''}`);
+  // llamadas, visitas, ensayos: el detalle escrito tal cual se cargó (sin usuario)
+  return items.map(a => `${a.cliente}: ${a.descripcion && a.descripcion.trim() ? a.descripcion : '(sin detalle escrito)'}`);
 }
 
 function renderDailyDetailPDF(res, detail) {
@@ -175,7 +180,7 @@ async function renderDailyDetailXLSX(res, detail) {
   ws.addRow([]);
 
   const headerRowIdx = ws.rowCount + 1;
-  ws.addRow(['Día', 'Fecha', 'Categoría', 'Cliente', 'Detalle', 'Usuario / Responsable']);
+  ws.addRow(['Día', 'Fecha', 'Categoría', 'Cliente', 'Detalle', 'Responsable']);
   ws.getRow(headerRowIdx).font = { bold: true };
 
   for (const dia of detail.dias) {
@@ -186,7 +191,10 @@ async function renderDailyDetailXLSX(res, detail) {
         algo = true;
         let cliente = item.cliente;
         let detalle, responsable;
-        if (cat.key === 'ventas') {
+        if (cat.key === 'cotizaciones') {
+          detalle = `Cotización ${item.numero} (${item.estado}) — ${item.productos || 'sin productos'} — Total ${item.moneda} ${item.total}${item.observaciones ? ' — ' + item.observaciones : ''}`;
+          responsable = item.responsable;
+        } else if (cat.key === 'ventas') {
           detalle = `Venta ${item.numero} — ${item.productos || 'sin productos'} — Total ${item.moneda} ${item.total}${item.observaciones ? ' — ' + item.observaciones : ''}`;
           responsable = item.vendedor;
         } else if (cat.key === 'cobranzas') {
@@ -194,7 +202,7 @@ async function renderDailyDetailXLSX(res, detail) {
           responsable = item.responsable;
         } else {
           detalle = item.descripcion && item.descripcion.trim() ? item.descripcion : '(sin detalle escrito)';
-          responsable = item.usuario;
+          responsable = '';
         }
         ws.addRow([dia.diaSemana, dia.fecha, cat.label, cliente, detalle, responsable || '']);
       }
@@ -209,10 +217,46 @@ async function renderDailyDetailXLSX(res, detail) {
   res.send(buffer);
 }
 
+async function renderDailyDetailDOCX(res, detail) {
+  const children = [
+    new Paragraph({ text: 'Tareas diarias realizadas en la semana', heading: HeadingLevel.HEADING_1, alignment: AlignmentType.CENTER }),
+    new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `Semana del ${detail.lunes} al ${detail.viernes}`, color: '6b7280', size: 20 })] }),
+    new Paragraph({ text: '' }),
+  ];
+
+  for (const dia of detail.dias) {
+    children.push(new Paragraph({ text: `${dia.diaSemana} — ${dia.fecha}`, heading: HeadingLevel.HEADING_2 }));
+
+    const totalItems = CATEGORIAS_DETALLE.reduce((s, c) => s + dia[c.key].length, 0);
+    if (totalItems === 0) {
+      children.push(new Paragraph({ children: [new TextRun({ text: 'Sin tareas registradas este día.', italics: true, color: '9ca3af' })] }));
+    } else {
+      for (const cat of CATEGORIAS_DETALLE) {
+        const items = dia[cat.key];
+        if (!items.length) continue;
+        children.push(new Paragraph({ children: [new TextRun({ text: `${cat.label} (${items.length})`, bold: true })], spacing: { before: 120 } }));
+        for (const linea of lineasDeCategoria(cat.key, items)) {
+          children.push(new Paragraph({ text: linea, bullet: { level: 0 } }));
+        }
+      }
+    }
+    children.push(new Paragraph({ text: '' }));
+  }
+
+  children.push(new Paragraph({ children: [new TextRun({ text: `Generado el ${new Date().toISOString().slice(0, 10)}`, size: 16, color: '9ca3af' })] }));
+
+  const doc = new Document({ sections: [{ children }] });
+  const buffer = await Packer.toBuffer(doc);
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+  res.setHeader('Content-Disposition', `attachment; filename="tareas_diarias_${detail.lunes}_a_${detail.viernes}.docx"`);
+  res.send(buffer);
+}
+
 router.get('/weekly-daily-detail', async (req, res) => {
   const format = req.query.format || 'pdf';
   const detail = await getWeeklyDailyDetail(db, { desde: req.query.desde });
   if (format === 'xlsx') return renderDailyDetailXLSX(res, detail);
+  if (format === 'docx') return renderDailyDetailDOCX(res, detail);
   return renderDailyDetailPDF(res, detail);
 });
 

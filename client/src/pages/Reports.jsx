@@ -3,17 +3,21 @@ import api from '../api/client.js';
 import { Card, Loading, Button, fmtUSD } from '../components/UI.jsx';
 import { CATEGORICAL, INK } from '../colors.js';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
-import { FileDown, Phone, MapPin, FlaskConical, DollarSign, Wallet } from 'lucide-react';
+import { FileDown, Phone, MapPin, FlaskConical, FileText, DollarSign, Wallet } from 'lucide-react';
 
 const CATEGORIAS_DIARIAS = [
   { key: 'llamadas', label: 'Llamadas', icon: Phone, color: 'text-blue-500' },
   { key: 'visitas', label: 'Visitas', icon: MapPin, color: 'text-emerald-500' },
   { key: 'ensayos', label: 'Ensayos', icon: FlaskConical, color: 'text-purple-500' },
+  { key: 'cotizaciones', label: 'Cotizaciones', icon: FileText, color: 'text-indigo-500' },
   { key: 'ventas', label: 'Ventas', icon: DollarSign, color: 'text-amber-500' },
   { key: 'cobranzas', label: 'Cobranzas', icon: Wallet, color: 'text-cyan-600' },
 ];
 
 function detalleItem(catKey, item) {
+  if (catKey === 'cotizaciones') {
+    return `Cotización ${item.numero} (${item.estado}) — ${item.productos || 'sin productos'} — Total ${item.moneda} ${fmtUSD(item.total)}${item.observaciones ? ' — ' + item.observaciones : ''}`;
+  }
   if (catKey === 'ventas') {
     return `Venta ${item.numero} — ${item.productos || 'sin productos'} — Total ${item.moneda} ${fmtUSD(item.total)}${item.observaciones ? ' — ' + item.observaciones : ''}`;
   }
@@ -36,13 +40,16 @@ function DailyDetailCard() {
         <div>
           <div className="text-sm font-semibold text-gray-700">Tareas diarias de la semana</div>
           <div className="text-xs text-gray-400">
-            Llamadas, visitas, ventas, cobranzas y ensayos, con el detalle escrito tal cual se cargó
+            Llamadas, visitas, ensayos, cotizaciones, ventas y cobranzas, con el detalle escrito tal cual se cargó
             {detail ? ` — Lunes ${detail.lunes} a Viernes ${detail.viernes}` : ''}
           </div>
         </div>
         <div className="flex gap-2">
           <Button variant="secondary" onClick={() => window.open('/api/export/weekly-daily-detail?format=xlsx', '_blank')}>
             <FileDown size={14} className="inline mr-1" /> Detalle diario (Excel)
+          </Button>
+          <Button variant="secondary" onClick={() => window.open('/api/export/weekly-daily-detail?format=docx', '_blank')}>
+            <FileDown size={14} className="inline mr-1" /> Detalle diario (Word)
           </Button>
           <Button onClick={() => window.open('/api/export/weekly-daily-detail?format=pdf', '_blank')}>
             <FileDown size={14} className="inline mr-1" /> Detalle diario (PDF)

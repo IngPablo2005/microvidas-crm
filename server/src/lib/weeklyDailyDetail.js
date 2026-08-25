@@ -1,7 +1,7 @@
 // Detalle día por día (Lunes a Viernes) de las tareas comerciales realizadas en la
 // semana: llamadas, visitas y ensayos (tabla "activities", con el detalle escrito tal
-// cual se cargó), más ventas y cobranzas del día. Se usa en Reportes → "Tareas
-// diarias de la semana" y en su exportación a PDF/Excel.
+// cual se cargó), más cotizaciones, ventas y cobranzas del día. Se usa en Reportes →
+// "Tareas diarias de la semana" y en su exportación a PDF/Excel/Word.
 
 const DIAS_SEMANA = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 
@@ -38,6 +38,13 @@ export async function getWeeklyDailyDetail(db, { desde } = {}) {
       WHERE a.tipo = 'Ensayo' AND date(a.fecha) = ? ORDER BY a.fecha
     `).all(fecha);
 
+    const cotizaciones = await db.prepare(`
+      SELECT q.id, q.numero, c.id as client_id, c.razon_social as cliente, q.responsable, q.moneda, q.total, q.estado, q.observaciones,
+        (SELECT GROUP_CONCAT(qi.descripcion || ' (x' || qi.cantidad || ')', ', ') FROM quote_items qi WHERE qi.quote_id = q.id) as productos
+      FROM quotes q JOIN clients c ON c.id = q.client_id
+      WHERE q.fecha = ? ORDER BY q.id
+    `).all(fecha);
+
     const ventas = await db.prepare(`
       SELECT s.id, s.numero, c.id as client_id, c.razon_social as cliente, s.vendedor, s.moneda, s.total, s.observaciones,
         (SELECT GROUP_CONCAT(si.descripcion || ' (x' || si.cantidad || ')', ', ') FROM sale_items si WHERE si.sale_id = s.id) as productos
@@ -51,7 +58,7 @@ export async function getWeeklyDailyDetail(db, { desde } = {}) {
       WHERE col.fecha = ? ORDER BY col.id
     `).all(fecha);
 
-    dias.push({ fecha, diaSemana: nombreDia(fecha), llamadas, visitas, ensayos, ventas, cobranzas });
+    dias.push({ fecha, diaSemana: nombreDia(fecha), llamadas, visitas, ensayos, cotizaciones, ventas, cobranzas });
   }
 
   return { lunes, viernes: dias[4].fecha, dias };

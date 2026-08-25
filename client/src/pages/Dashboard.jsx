@@ -211,7 +211,7 @@ function VisitasLlamadasCard() {
                   {r.tipo === 'Visita' ? <MapPin size={14} className="text-emerald-500 mt-0.5" /> : r.tipo === 'Ensayo' ? <FlaskConical size={14} className="text-purple-500 mt-0.5" /> : <Phone size={14} className="text-blue-500 mt-0.5" />}
                   <div className="flex-1 min-w-0">
                     <div className="text-sm text-gray-800">{r.cliente_nombre}</div>
-                    <div className="text-xs text-gray-400">{r.tipo} · {new Date(r.fecha).toLocaleString('es-AR')}{r.usuario ? ` · ${r.usuario}` : ''}</div>
+                    <div className="text-xs text-gray-400">{r.tipo} · {new Date(r.fecha).toLocaleString('es-AR')}</div>
                     {r.descripcion && <div className="text-xs text-gray-500 mt-0.5">{r.descripcion}</div>}
                   </div>
                 </div>
