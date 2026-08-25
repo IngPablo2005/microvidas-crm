@@ -12,20 +12,31 @@ const upload = multer({ dest: uploadDir, limits: { fileSize: 15 * 1024 * 1024 } 
 
 router.get('/', async (req, res) => {
   const { q, estado, provincia, localidad, responsable, segmento, potencial, page = 1, pageSize = 100 } = req.query;
-  let sql = 'SELECT * FROM clients WHERE 1=1';
+  let whereSql = 'WHERE 1=1';
   const params = [];
-  if (q) { sql += ' AND (razon_social LIKE ? OR nombre_comercial LIKE ? OR cuit LIKE ? OR contacto_principal LIKE ?)'; params.push(`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`); }
-  if (estado) { sql += ' AND estado = ?'; params.push(estado); }
-  if (provincia) { sql += ' AND provincia = ?'; params.push(provincia); }
-  if (localidad) { sql += ' AND localidad = ?'; params.push(localidad); }
-  if (responsable) { sql += ' AND responsable_comercial = ?'; params.push(responsable); }
-  if (segmento) { sql += ' AND segmento = ?'; params.push(segmento); }
-  if (potencial) { sql += ' AND potencial_comercial = ?'; params.push(potencial); }
-  sql += ' ORDER BY razon_social LIMIT ? OFFSET ?';
-  params.push(Number(pageSize), (Number(page) - 1) * Number(pageSize));
-  const rows = await db.prepare(sql).all(...params);
-  const total = (await db.prepare('SELECT COUNT(*) c FROM clients').get()).c;
-  res.json({ rows, total });
+  if (q) { whereSql += ' AND (razon_social LIKE ? OR nombre_comercial LIKE ? OR cuit LIKE ? OR contacto_principal LIKE ?)'; params.push(`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`); }
+  if (estado) { whereSql += ' AND estado = ?'; params.push(estado); }
+  if (provincia) { whereSql += ' AND provincia = ?'; params.push(provincia); }
+  if (localidad) { whereSql += ' AND localidad = ?'; params.push(localidad); }
+  if (responsable) { whereSql += ' AND responsable_comercial = ?'; params.push(responsable); }
+  if (segmento) { whereSql += ' AND segmento = ?'; params.push(segmento); }
+  if (potencial) { whereSql += ' AND potencial_comercial = ?'; params.push(potencial); }
+
+  // El total refleja los filtros aplicados (antes contaba siempre todos los clientes,
+  // lo que rompía la paginación cuando se filtraba por estado/provincia/búsqueda).
+  const total = (await db.prepare(`SELECT COUNT(*) c FROM clients ${whereSql}`).get(...params)).c;
+
+  const sql = `SELECT * FROM clients ${whereSql} ORDER BY razon_social LIMIT ? OFFSET ?`;
+  const rows = await db.prepare(sql).all(...params, Number(pageSize), (Number(page) - 1) * Number(pageSize));
+  res.json({ rows, total, page: Number(page), pageSize: Number(pageSize) });
+});
+
+// Provincias distintas entre TODOS los clientes (no solo la página actual), para el
+// filtro del listado — antes se armaba a partir de las filas visibles y por eso
+// "desaparecían" provincias que solo tenían clientes en otras páginas.
+router.get('/filtros/provincias', async (req, res) => {
+  const rows = await db.prepare(`SELECT DISTINCT provincia FROM clients WHERE provincia IS NOT NULL AND provincia != '' ORDER BY provincia`).all();
+  res.json(rows.map(r => r.provincia));
 });
 
 router.get('/:id', async (req, res) => {

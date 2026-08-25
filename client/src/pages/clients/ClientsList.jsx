@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../api/client.js';
 import { Card, Badge, Button, Modal, Field, inputCls, Loading, EmptyState } from '../../components/UI.jsx';
-import { Plus, Download, Upload, Trash2 } from 'lucide-react';
+import { Plus, Download, Upload, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const ESTADOS = ['Activo', 'Inactivo', 'Perdido'];
 const POTENCIALES = ['Alto', 'Medio', 'Bajo'];
+const PAGE_SIZE = 50;
 
 const emptyClient = {
   razon_social: '', nombre_comercial: '', cuit: '', contacto_principal: '', cargo: '', telefono: '', whatsapp: '',
@@ -16,6 +17,8 @@ const emptyClient = {
 export default function ClientsList() {
   const navigate = useNavigate();
   const [rows, setRows] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({ q: '', estado: '', provincia: '' });
   const [showNew, setShowNew] = useState(false);
@@ -24,16 +27,35 @@ export default function ClientsList() {
   const [toDelete, setToDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
   async function load() {
     setLoading(true);
-    const params = Object.fromEntries(Object.entries(filters).filter(([, v]) => v));
+    const params = { ...Object.fromEntries(Object.entries(filters).filter(([, v]) => v)), page, pageSize: PAGE_SIZE };
     const { data } = await api.get('/clients', { params });
     setRows(data.rows);
-    setProvincias([...new Set(data.rows.map(r => r.provincia).filter(Boolean))]);
+    setTotal(data.total);
     setLoading(false);
   }
 
-  useEffect(() => { load(); }, [filters]);
+  // La lista de provincias para el filtro sale de TODOS los clientes (no solo los de
+  // la página actual), para que no "desaparezcan" opciones al paginar.
+  useEffect(() => { api.get('/clients/filtros/provincias').then(({ data }) => setProvincias(data)); }, []);
+
+  useEffect(() => { load(); }, [filters, page]);
+
+  // Si la página actual quedó fuera de rango (por ejemplo, se borró el único cliente
+  // de la última página), volvemos a una página válida.
+  useEffect(() => {
+    if (!loading && page > totalPages) setPage(totalPages);
+  }, [loading, totalPages]);
+
+  // Cambiar un filtro siempre vuelve a la página 1 (en el mismo evento, para no
+  // disparar una carga de más con la página vieja antes de resetearla).
+  function updateFilter(key, value) {
+    setFilters(f => ({ ...f, [key]: value }));
+    setPage(1);
+  }
 
   async function createClient(e) {
     e.preventDefault();
@@ -60,7 +82,7 @@ export default function ClientsList() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold text-gray-800">Clientes</h1>
-          <p className="text-sm text-gray-500">{rows.length} clientes encontrados</p>
+          <p className="text-sm text-gray-500">{total} cliente{total === 1 ? '' : 's'} encontrado{total === 1 ? '' : 's'}</p>
         </div>
         <div className="flex gap-2">
           <Button variant="secondary" onClick={() => navigate('/importar')}><Upload size={14} className="inline mr-1" /> Importar</Button>
@@ -71,12 +93,12 @@ export default function ClientsList() {
 
       <Card className="p-4">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <input className={inputCls} placeholder="Buscar por razón social, CUIT, contacto..." value={filters.q} onChange={e => setFilters(f => ({ ...f, q: e.target.value }))} />
-          <select className={inputCls} value={filters.estado} onChange={e => setFilters(f => ({ ...f, estado: e.target.value }))}>
+          <input className={inputCls} placeholder="Buscar por razón social, CUIT, contacto..." value={filters.q} onChange={e => updateFilter('q', e.target.value)} />
+          <select className={inputCls} value={filters.estado} onChange={e => updateFilter('estado', e.target.value)}>
             <option value="">Todos los estados</option>
             {ESTADOS.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
-          <select className={inputCls} value={filters.provincia} onChange={e => setFilters(f => ({ ...f, provincia: e.target.value }))}>
+          <select className={inputCls} value={filters.provincia} onChange={e => updateFilter('provincia', e.target.value)}>
             <option value="">Todas las provincias</option>
             {provincias.map(p => <option key={p} value={p}>{p}</option>)}
           </select>
@@ -123,6 +145,23 @@ export default function ClientsList() {
           </table>
         )}
       </Card>
+
+      {!loading && total > 0 && (
+        <div className="flex items-center justify-between text-sm text-gray-500">
+          <div>
+            Mostrando {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} de {total}
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="secondary" className="disabled:opacity-40 disabled:cursor-not-allowed" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}>
+              <ChevronLeft size={14} className="inline" /> Anterior
+            </Button>
+            <span className="text-gray-600">Página {page} de {totalPages}</span>
+            <Button variant="secondary" className="disabled:opacity-40 disabled:cursor-not-allowed" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages}>
+              Siguiente <ChevronRight size={14} className="inline" />
+            </Button>
+          </div>
+        </div>
+      )}
 
       <Modal open={showNew} onClose={() => setShowNew(false)} title="Nuevo cliente" width="max-w-2xl">
         <form onSubmit={createClient} className="grid grid-cols-2 gap-x-4">
