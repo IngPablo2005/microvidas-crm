@@ -99,6 +99,7 @@ export default function ClientDetail() {
           </div>
           <div className="flex flex-wrap gap-2 max-w-xs justify-end">
             <QuickAction icon={StickyNote} label="Agregar nota" onClick={() => setModal('nota')} />
+            <QuickAction icon={Phone} label="Registrar visita/llamada" onClick={() => setModal('contacto')} />
             <QuickAction icon={CheckSquare} label="Crear tarea" onClick={() => setModal('tarea')} />
             <QuickAction icon={FileText} label="Nueva cotización" onClick={() => navigate(`/cotizaciones?client_id=${id}`)} />
             <QuickAction icon={ShoppingCart} label="Registrar venta" onClick={() => navigate(`/ventas?client_id=${id}`)} />
@@ -127,6 +128,7 @@ export default function ClientDetail() {
       {tab === 'Documentos' && <DocumentosTab attachments={attachments} clientId={id} onChange={load} />}
 
       {modal === 'nota' && <NoteModal clientId={id} onClose={() => setModal(null)} onSaved={load} />}
+      {modal === 'contacto' && <VisitCallModal clientId={id} onClose={() => setModal(null)} onSaved={load} />}
       {modal === 'tarea' && <TaskModal clientId={id} onClose={() => setModal(null)} onSaved={load} />}
       {modal === 'hito' && <MilestoneModal clientId={id} onClose={() => setModal(null)} onSaved={load} />}
       {modal === 'archivo' && <FileModal clientId={id} onClose={() => setModal(null)} onSaved={load} />}
@@ -433,6 +435,49 @@ function NoteModal({ clientId, onClose, onSaved }) {
       <form onSubmit={save}>
         <Field label="Nota"><textarea autoFocus required rows={4} className={inputCls} value={texto} onChange={e => setTexto(e.target.value)} /></Field>
         <div className="flex justify-end gap-2 mt-3"><Button variant="secondary" type="button" onClick={onClose}>Cancelar</Button><Button type="submit">Guardar</Button></div>
+      </form>
+    </Modal>
+  );
+}
+
+const TIPOS_CONTACTO_CLIENTE = ['Visita', 'Llamada'];
+
+function VisitCallModal({ clientId, onClose, onSaved }) {
+  const [form, setForm] = useState({ tipo: 'Visita', fecha: new Date().toISOString().slice(0, 10), descripcion: '' });
+  const [saving, setSaving] = useState(false);
+
+  async function save(e) {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      // Mismo endpoint que usa el Dashboard: si la fecha es más reciente que el
+      // "último contacto" del cliente, lo actualiza automáticamente.
+      await api.post('/activities', { ...form, client_id: clientId, usuario: 'Usuario' });
+      onSaved();
+      onClose();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose} title="Registrar visita o llamada">
+      <form onSubmit={save}>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Tipo">
+            <select className={inputCls} value={form.tipo} onChange={e => setForm(f => ({ ...f, tipo: e.target.value }))}>
+              {TIPOS_CONTACTO_CLIENTE.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </Field>
+          <Field label="Fecha"><input type="date" className={inputCls} value={form.fecha} onChange={e => setForm(f => ({ ...f, fecha: e.target.value }))} /></Field>
+        </div>
+        <Field label="Comentario">
+          <textarea rows={3} className={inputCls} placeholder="Ej: se mostró interesado en ampliar el pedido..." value={form.descripcion} onChange={e => setForm(f => ({ ...f, descripcion: e.target.value }))} />
+        </Field>
+        <div className="flex justify-end gap-2 mt-3">
+          <Button variant="secondary" type="button" onClick={onClose}>Cancelar</Button>
+          <Button type="submit" disabled={saving}>{saving ? 'Guardando...' : 'Registrar'}</Button>
+        </div>
       </form>
     </Modal>
   );
