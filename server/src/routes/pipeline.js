@@ -27,8 +27,8 @@ router.post('/', async (req, res) => {
 
 router.put('/:id', async (req, res) => {
   const o = req.body;
-  await db.prepare(`UPDATE pipeline_opportunities SET titulo=?, etapa=?, importe_estimado=?, probabilidad=?, responsable=?, proxima_accion=?, fecha_cierre_estimada=?, updated_at=datetime('now') WHERE id=?`)
-    .run(o.titulo, o.etapa, o.importe_estimado, o.probabilidad, o.responsable, o.proxima_accion, o.fecha_cierre_estimada, req.params.id);
+  await db.prepare(`UPDATE pipeline_opportunities SET titulo=?, client_id=?, etapa=?, importe_estimado=?, probabilidad=?, responsable=?, proxima_accion=?, fecha_cierre_estimada=?, updated_at=datetime('now') WHERE id=?`)
+    .run(o.titulo, o.client_id || null, o.etapa, o.importe_estimado, o.probabilidad, o.responsable, o.proxima_accion, o.fecha_cierre_estimada, req.params.id);
   res.json({ ok: true });
 });
 
