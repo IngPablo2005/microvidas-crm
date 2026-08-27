@@ -59,8 +59,23 @@ router.get('/ranking-clientes', async (req, res) => {
 
 router.get('/ranking-productos', async (req, res) => {
   const rows = await db.prepare(`
-    SELECT descripcion, SUM(cantidad) cantidad, SUM(importe) total
-    FROM sale_items GROUP BY descripcion ORDER BY total DESC LIMIT 10
+    SELECT si.descripcion, SUM(si.cantidad) cantidad, SUM(si.importe) total,
+      COALESCE(MAX(p.unidad), 'unidades') as unidad
+    FROM sale_items si LEFT JOIN products p ON p.id = si.product_id
+    GROUP BY si.descripcion ORDER BY total DESC LIMIT 10
+  `).all();
+  res.json(rows);
+});
+
+// Mismo agrupamiento que ranking-productos, pero ordenado por cantidad vendida
+// (unidades/litros/packs, según el producto) en vez de por facturación — para el
+// gráfico "Ranking de productos por unidades vendidas".
+router.get('/ranking-productos-unidades', async (req, res) => {
+  const rows = await db.prepare(`
+    SELECT si.descripcion, SUM(si.cantidad) cantidad, SUM(si.importe) total,
+      COALESCE(MAX(p.unidad), 'unidades') as unidad
+    FROM sale_items si LEFT JOIN products p ON p.id = si.product_id
+    GROUP BY si.descripcion ORDER BY cantidad DESC LIMIT 10
   `).all();
   res.json(rows);
 });

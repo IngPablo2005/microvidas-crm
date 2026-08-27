@@ -111,6 +111,11 @@ Además del resumen anterior, en Reportes hay una sección que muestra, día por
 - La sección de Reportes agrupa por día y categoría: para llamadas, visitas y ensayos muestra el comentario escrito al cargarlos; para cotizaciones y ventas, los productos y el total; para cobranzas, el importe y medio de pago.
 - Se puede descargar en PDF ("Detalle diario (PDF)"), Word ("Detalle diario (Word)") o Excel ("Detalle diario (Excel)") con el mismo desglose por día.
 
+### Ranking de productos por unidades vendidas y gráficos más modernos (Reportes)
+
+- **Nuevo gráfico "Ranking de productos (por unidades vendidas)":** además del ranking de productos por facturación (U$), ahora hay un tercer gráfico en Reportes que ordena los productos por cantidad vendida (litros, bidones, dosis, bolsones, packs, etc., según la unidad de cada producto cargada en Configuración → Productos). El orden puede diferir del ranking por facturación: un producto de bajo precio unitario pero alto volumen puede aparecer más arriba acá aunque factura menos. El detalle al pasar el mouse muestra la cantidad con su unidad (por ejemplo "180 bidón 20L").
+- **Barras más angostas en todos los gráficos de Reportes:** se achicó el grosor máximo de las barras (con un tope fijo en vez de estirarse para llenar el espacio) para un look más liviano y moderno, manteniendo las esquinas redondeadas ya existentes. Afecta a ventas por mes/año, evolución del pipeline, cartera (cobrado/pendiente), y los tres rankings.
+
 ## Simplificaciones del prototipo (a reforzar antes de producción)
 
 - La autenticación emite un JWT válido, pero los endpoints de negocio no verifican el token en cada request (solo `/auth/me` y la gestión de usuarios lo exigen). Para producción, aplicar el middleware `requireAuth`/`requireRole` a todas las rutas según el rol correspondiente.

@@ -100,6 +100,9 @@ function DailyDetailCard() {
 }
 
 const BLUE = CATEGORICAL[0];
+// Barras más angostas y con un tope de grosor fijo (en vez de estirarse para llenar
+// el espacio disponible) para un look más moderno y liviano.
+const BAR_SIZE = 22;
 
 function ChartCard({ title, children, height = 260 }) {
   return (
@@ -118,16 +121,17 @@ export default function Reports() {
 
   useEffect(() => {
     (async () => {
-      const [weekly, monthly, yearly, pipeline, conversion, rankClients, rankProducts, colWeekly, colMonthly, colClient, colVendor, colMethod, debt] = await Promise.all([
+      const [weekly, monthly, yearly, pipeline, conversion, rankClients, rankProducts, rankProductsUnidades, colWeekly, colMonthly, colClient, colVendor, colMethod, debt] = await Promise.all([
         api.get('/reports/sales-weekly'), api.get('/reports/sales-monthly'), api.get('/reports/sales-yearly'),
         api.get('/reports/pipeline-evolution'), api.get('/reports/conversion'), api.get('/reports/ranking-clientes'),
-        api.get('/reports/ranking-productos'), api.get('/reports/collections-weekly'), api.get('/reports/collections-monthly'),
+        api.get('/reports/ranking-productos'), api.get('/reports/ranking-productos-unidades'), api.get('/reports/collections-weekly'), api.get('/reports/collections-monthly'),
         api.get('/reports/collections-by-client'), api.get('/reports/collections-by-vendor'), api.get('/reports/collections-by-method'),
         api.get('/reports/debt-evolution'),
       ]);
       setData({
         weekly: weekly.data, monthly: monthly.data, yearly: yearly.data, pipeline: pipeline.data, conversion: conversion.data,
-        rankClients: rankClients.data, rankProducts: rankProducts.data, colWeekly: colWeekly.data, colMonthly: colMonthly.data,
+        rankClients: rankClients.data, rankProducts: rankProducts.data, rankProductsUnidades: rankProductsUnidades.data,
+        colWeekly: colWeekly.data, colMonthly: colMonthly.data,
         colClient: colClient.data, colVendor: colVendor.data, colMethod: colMethod.data, debt: debt.data,
       });
     })();
@@ -159,13 +163,13 @@ export default function Reports() {
           <ResponsiveContainer><LineChart data={data.weekly}><CartesianGrid vertical={false} stroke={INK.grid} /><XAxis dataKey="fecha" tick={axisStyle} /><YAxis tick={axisStyle} /><Tooltip contentStyle={tooltipStyle} formatter={v => fmtUSD(v)} /><Line type="monotone" dataKey="importe" stroke={BLUE} strokeWidth={2} dot={{ r: 3 }} /></LineChart></ResponsiveContainer>
         </ChartCard>
         <ChartCard title="Ventas por mes">
-          <ResponsiveContainer><BarChart data={data.monthly}><CartesianGrid vertical={false} stroke={INK.grid} /><XAxis dataKey="mes" tick={axisStyle} /><YAxis tick={axisStyle} /><Tooltip contentStyle={tooltipStyle} formatter={v => fmtUSD(v)} /><Bar dataKey="importe" fill={BLUE} radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer>
+          <ResponsiveContainer><BarChart data={data.monthly}><CartesianGrid vertical={false} stroke={INK.grid} /><XAxis dataKey="mes" tick={axisStyle} /><YAxis tick={axisStyle} /><Tooltip contentStyle={tooltipStyle} formatter={v => fmtUSD(v)} /><Bar dataKey="importe" fill={BLUE} radius={[4, 4, 0, 0]} maxBarSize={BAR_SIZE} /></BarChart></ResponsiveContainer>
         </ChartCard>
         <ChartCard title="Ventas por año">
-          <ResponsiveContainer><BarChart data={data.yearly}><CartesianGrid vertical={false} stroke={INK.grid} /><XAxis dataKey="anio" tick={axisStyle} /><YAxis tick={axisStyle} /><Tooltip contentStyle={tooltipStyle} formatter={v => fmtUSD(v)} /><Bar dataKey="importe" fill={BLUE} radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer>
+          <ResponsiveContainer><BarChart data={data.yearly}><CartesianGrid vertical={false} stroke={INK.grid} /><XAxis dataKey="anio" tick={axisStyle} /><YAxis tick={axisStyle} /><Tooltip contentStyle={tooltipStyle} formatter={v => fmtUSD(v)} /><Bar dataKey="importe" fill={BLUE} radius={[4, 4, 0, 0]} maxBarSize={BAR_SIZE} /></BarChart></ResponsiveContainer>
         </ChartCard>
         <ChartCard title="Evolución del pipeline por etapa">
-          <ResponsiveContainer><BarChart data={data.pipeline}><CartesianGrid vertical={false} stroke={INK.grid} /><XAxis dataKey="etapa" tick={axisStyle} /><YAxis tick={axisStyle} /><Tooltip contentStyle={tooltipStyle} formatter={v => fmtUSD(v)} /><Bar dataKey="valor" fill={CATEGORICAL[6]} radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer>
+          <ResponsiveContainer><BarChart data={data.pipeline}><CartesianGrid vertical={false} stroke={INK.grid} /><XAxis dataKey="etapa" tick={axisStyle} /><YAxis tick={axisStyle} /><Tooltip contentStyle={tooltipStyle} formatter={v => fmtUSD(v)} /><Bar dataKey="valor" fill={CATEGORICAL[6]} radius={[4, 4, 0, 0]} maxBarSize={BAR_SIZE} /></BarChart></ResponsiveContainer>
         </ChartCard>
       </div>
 
@@ -189,7 +193,7 @@ export default function Reports() {
           <ResponsiveContainer><BarChart data={[{ name: 'Cartera', vencido: data.debt.vencido, cobrado: data.debt.cobrado, pendiente: data.debt.pendiente }]} layout="vertical">
             <CartesianGrid horizontal={false} stroke={INK.grid} /><XAxis type="number" tick={axisStyle} /><YAxis type="category" dataKey="name" tick={axisStyle} width={70} />
             <Tooltip contentStyle={tooltipStyle} formatter={v => fmtUSD(v)} />
-            <Bar dataKey="cobrado" fill={CATEGORICAL[2]} radius={[4, 4, 4, 4]} name="Cobrado" />
+            <Bar dataKey="cobrado" fill={CATEGORICAL[2]} radius={[4, 4, 4, 4]} maxBarSize={BAR_SIZE} name="Cobrado" />
           </BarChart></ResponsiveContainer>
           <div className="flex gap-4 mt-2 text-xs text-gray-500 justify-center">
             <span>Vencido: {fmtUSD(data.debt.vencido)}</span><span>Cobrado: {fmtUSD(data.debt.cobrado)}</span><span>Pendiente: {fmtUSD(data.debt.pendiente)}</span>
@@ -197,17 +201,24 @@ export default function Reports() {
         </ChartCard>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-4">
+      <div className="grid md:grid-cols-3 gap-4">
         <ChartCard title="Ranking de clientes (por facturación)" height={300}>
           <ResponsiveContainer><BarChart data={data.rankClients} layout="vertical" margin={{ left: 20 }}>
             <CartesianGrid horizontal={false} stroke={INK.grid} /><XAxis type="number" tick={axisStyle} /><YAxis type="category" dataKey="razon_social" tick={{ ...axisStyle, fontSize: 10 }} width={140} />
-            <Tooltip contentStyle={tooltipStyle} formatter={v => fmtUSD(v)} /><Bar dataKey="total" fill={BLUE} radius={[0, 4, 4, 0]} />
+            <Tooltip contentStyle={tooltipStyle} formatter={v => fmtUSD(v)} /><Bar dataKey="total" fill={BLUE} radius={[0, 4, 4, 0]} maxBarSize={BAR_SIZE} />
           </BarChart></ResponsiveContainer>
         </ChartCard>
         <ChartCard title="Ranking de productos (por volumen de ventas)" height={300}>
           <ResponsiveContainer><BarChart data={data.rankProducts} layout="vertical" margin={{ left: 20 }}>
             <CartesianGrid horizontal={false} stroke={INK.grid} /><XAxis type="number" tick={axisStyle} /><YAxis type="category" dataKey="descripcion" tick={{ ...axisStyle, fontSize: 10 }} width={140} />
-            <Tooltip contentStyle={tooltipStyle} formatter={v => fmtUSD(v)} /><Bar dataKey="total" fill={CATEGORICAL[1]} radius={[0, 4, 4, 0]} />
+            <Tooltip contentStyle={tooltipStyle} formatter={v => fmtUSD(v)} /><Bar dataKey="total" fill={CATEGORICAL[1]} radius={[0, 4, 4, 0]} maxBarSize={BAR_SIZE} />
+          </BarChart></ResponsiveContainer>
+        </ChartCard>
+        <ChartCard title="Ranking de productos (por unidades vendidas)" height={300}>
+          <ResponsiveContainer><BarChart data={data.rankProductsUnidades} layout="vertical" margin={{ left: 20 }}>
+            <CartesianGrid horizontal={false} stroke={INK.grid} /><XAxis type="number" tick={axisStyle} /><YAxis type="category" dataKey="descripcion" tick={{ ...axisStyle, fontSize: 10 }} width={140} />
+            <Tooltip contentStyle={tooltipStyle} formatter={(v, n, props) => [`${v.toLocaleString('es-AR')} ${props.payload.unidad || 'unidades'}`, 'Cantidad']} />
+            <Bar dataKey="cantidad" fill={CATEGORICAL[4]} radius={[0, 4, 4, 0]} maxBarSize={BAR_SIZE} />
           </BarChart></ResponsiveContainer>
         </ChartCard>
       </div>
@@ -219,11 +230,11 @@ export default function Reports() {
         <ChartCard title="Cobranzas por cliente">
           <ResponsiveContainer><BarChart data={data.colClient} layout="vertical" margin={{ left: 20 }}>
             <CartesianGrid horizontal={false} stroke={INK.grid} /><XAxis type="number" tick={axisStyle} /><YAxis type="category" dataKey="razon_social" tick={{ ...axisStyle, fontSize: 9 }} width={110} />
-            <Tooltip contentStyle={tooltipStyle} formatter={v => fmtUSD(v)} /><Bar dataKey="total" fill={CATEGORICAL[2]} radius={[0, 4, 4, 0]} />
+            <Tooltip contentStyle={tooltipStyle} formatter={v => fmtUSD(v)} /><Bar dataKey="total" fill={CATEGORICAL[2]} radius={[0, 4, 4, 0]} maxBarSize={BAR_SIZE} />
           </BarChart></ResponsiveContainer>
         </ChartCard>
         <ChartCard title="Cobranzas por medio de pago">
-          <ResponsiveContainer><BarChart data={data.colMethod}><CartesianGrid vertical={false} stroke={INK.grid} /><XAxis dataKey="medio_pago" tick={{ ...axisStyle, fontSize: 9 }} /><YAxis tick={axisStyle} /><Tooltip contentStyle={tooltipStyle} formatter={v => fmtUSD(v)} /><Bar dataKey="total" fill={CATEGORICAL[3]} radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer>
+          <ResponsiveContainer><BarChart data={data.colMethod}><CartesianGrid vertical={false} stroke={INK.grid} /><XAxis dataKey="medio_pago" tick={{ ...axisStyle, fontSize: 9 }} /><YAxis tick={axisStyle} /><Tooltip contentStyle={tooltipStyle} formatter={v => fmtUSD(v)} /><Bar dataKey="total" fill={CATEGORICAL[3]} radius={[4, 4, 0, 0]} maxBarSize={BAR_SIZE} /></BarChart></ResponsiveContainer>
         </ChartCard>
       </div>
     </div>
