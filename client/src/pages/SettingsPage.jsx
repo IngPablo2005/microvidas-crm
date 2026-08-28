@@ -15,7 +15,7 @@ const EXPORT_ENTITIES = [
 export default function SettingsPage() {
   const { user } = useAuth();
   const [users, setUsers] = useState([]);
-  const [settings, setSettings] = useState({ objetivo_mensual_usd: '', dias_sin_contacto_alerta: '' });
+  const [settings, setSettings] = useState({ objetivo_mensual_usd: '', dias_sin_contacto_alerta: '', condiciones_comerciales_default: '' });
   const [loading, setLoading] = useState(true);
   const [showNewUser, setShowNewUser] = useState(false);
   const canManageUsers = user?.role === 'Administrador' || user?.role === 'Gerente';
@@ -23,7 +23,11 @@ export default function SettingsPage() {
   async function load() {
     setLoading(true);
     const [s] = await Promise.all([api.get('/dashboard/settings')]);
-    setSettings({ objetivo_mensual_usd: s.data.objetivo_mensual_usd || '', dias_sin_contacto_alerta: s.data.dias_sin_contacto_alerta || '' });
+    setSettings({
+      objetivo_mensual_usd: s.data.objetivo_mensual_usd || '',
+      dias_sin_contacto_alerta: s.data.dias_sin_contacto_alerta || '',
+      condiciones_comerciales_default: s.data.condiciones_comerciales_default || '',
+    });
     if (canManageUsers) {
       const u = await api.get('/auth/users');
       setUsers(u.data);
@@ -62,6 +66,25 @@ export default function SettingsPage() {
             <input type="number" className={inputCls} value={settings.dias_sin_contacto_alerta} onChange={e => setSettings(s => ({ ...s, dias_sin_contacto_alerta: e.target.value }))} />
           </Field>
           <div className="md:col-span-2"><Button type="submit">Guardar configuración</Button></div>
+        </form>
+      </Card>
+
+      <Card className="p-5">
+        <div className="text-sm font-semibold text-gray-700 mb-1">Cotizaciones</div>
+        <p className="text-xs text-gray-500 mb-3">
+          Texto de "Condiciones comerciales" que se precarga en cada cotización nueva (forma de pago, plazos de entrega, validez, etc.).
+          Se puede editar o reemplazar en cada cotización sin afectar esta plantilla.
+        </p>
+        <form onSubmit={saveSettings}>
+          <Field label="Condiciones comerciales por defecto">
+            <textarea
+              className={inputCls} rows={4}
+              value={settings.condiciones_comerciales_default}
+              onChange={e => setSettings(s => ({ ...s, condiciones_comerciales_default: e.target.value }))}
+              placeholder="Ej: Pago 50% al confirmar el pedido y 50% contra entrega. Entrega en 7 días hábiles. Precios sujetos a disponibilidad de stock."
+            />
+          </Field>
+          <Button type="submit">Guardar configuración</Button>
         </form>
       </Card>
 

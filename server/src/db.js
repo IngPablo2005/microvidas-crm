@@ -162,6 +162,9 @@ CREATE TABLE IF NOT EXISTS quotes (
   estado TEXT DEFAULT 'Borrador', -- Borrador, Enviada, En negociacion, Aceptada, Rechazada, Vencida
   responsable TEXT,
   observaciones TEXT,
+  condiciones_comerciales TEXT, -- texto libre, precargado desde settings.condiciones_comerciales_default
+  item_headers TEXT, -- JSON con los títulos de columna de la tabla de productos (editable por cotización)
+  total_financiado REAL DEFAULT 0,
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now'))
 );
@@ -174,6 +177,7 @@ CREATE TABLE IF NOT EXISTS quote_items (
   cantidad REAL DEFAULT 1,
   precio_unitario REAL DEFAULT 0,
   descuento REAL DEFAULT 0,
+  financiado REAL DEFAULT 0, -- precio financiado (USD) por unidad, editable manualmente por línea
   importe REAL DEFAULT 0
 );
 
@@ -348,6 +352,14 @@ CREATE INDEX IF NOT EXISTS idx_client_crops_client ON client_crops(client_id);
   if (!notifCols.includes('ref_id')) await exec('ALTER TABLE notifications ADD COLUMN ref_id INTEGER');
   if (!notifCols.includes('disparar_en')) await exec('ALTER TABLE notifications ADD COLUMN disparar_en TEXT');
   await exec('CREATE INDEX IF NOT EXISTS idx_notifications_ref ON notifications(ref_table, ref_id)');
+
+  const quoteCols = (await db.prepare("PRAGMA table_info(quotes)").all()).map(c => c.name);
+  if (!quoteCols.includes('condiciones_comerciales')) await exec('ALTER TABLE quotes ADD COLUMN condiciones_comerciales TEXT');
+  if (!quoteCols.includes('item_headers')) await exec('ALTER TABLE quotes ADD COLUMN item_headers TEXT');
+  if (!quoteCols.includes('total_financiado')) await exec('ALTER TABLE quotes ADD COLUMN total_financiado REAL DEFAULT 0');
+
+  const quoteItemCols = (await db.prepare("PRAGMA table_info(quote_items)").all()).map(c => c.name);
+  if (!quoteItemCols.includes('financiado')) await exec('ALTER TABLE quote_items ADD COLUMN financiado REAL DEFAULT 0');
 }
 
 export default db;

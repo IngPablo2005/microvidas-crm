@@ -121,6 +121,13 @@ Además del resumen anterior, en Reportes hay una sección que muestra, día por
 - **Editar una oportunidad:** en el tablero de Pipeline, cada tarjeta tiene un ícono de lápiz que abre un formulario para modificar título, cliente, importe estimado, probabilidad, etapa, responsable, próxima acción y fecha de cierre estimada. Antes solo se podía cambiar la etapa con el selector de la tarjeta; el resto de los datos quedaba fijo desde la creación.
 - **Porcentaje por etapa:** el encabezado de cada columna del Pipeline ahora muestra, junto a la cantidad de oportunidades, qué porcentaje representa esa etapa sobre el total de oportunidades cargadas (por ejemplo "Cotización (2 · 25%)"). Sirve para ver de un vistazo dónde se concentra el pipeline comercial.
 
+### Cotizador de precios (Cotizaciones)
+
+- **Tabla de productos tipo planilla:** al crear o editar una cotización, los productos se cargan en una tabla editable (no un formulario de campos sueltos). Cada línea permite elegir un producto de la lista precargada o escribir uno libre, y todas las celdas son editables: cantidad, precio lista, descuento (%), y la nueva columna **Financiado** (un precio o valor financiado por unidad, para cotizar la opción de pago financiado además del precio de contado/lista). El precio con descuento y el subtotal de cada línea se calculan solos.
+- **Títulos de columna editables:** los encabezados de la tabla ("Producto", "Cantidad", "Precio lista", etc.) también se pueden reescribir por cotización — útil para adaptar el vocabulario a lo que se está cotizando (por ejemplo cambiar "Cantidad" por "Cantidad (L)"). Quedan guardados con esa cotización y se reflejan igual en el PDF.
+- **Condiciones comerciales:** cada cotización tiene un campo de texto libre "Condiciones comerciales" (forma de pago, plazos de entrega, validez, etc.). Se precarga automáticamente con una plantilla configurable en Configuración → Cotizaciones → "Condiciones comerciales por defecto", pero se puede reescribir libremente en cada cotización sin afectar esa plantilla.
+- **Descargar PDF:** desde el detalle de una cotización, el botón "Descargar PDF" genera un documento con membrete de Microvidas (verde), los datos del cliente, la tabla de productos con sus columnas (incluida Financiado), el total (y el total financiado si corresponde), las condiciones comerciales y el pie de validez — pensado para enviar directamente al cliente.
+
 ## Simplificaciones del prototipo (a reforzar antes de producción)
 
 - La autenticación emite un JWT válido, pero los endpoints de negocio no verifican el token en cada request (solo `/auth/me` y la gestión de usuarios lo exigen). Para producción, aplicar el middleware `requireAuth`/`requireRole` a todas las rutas según el rol correspondiente.

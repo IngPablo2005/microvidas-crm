@@ -2,16 +2,24 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import api from '../api/client.js';
 import { Card, Badge, Button, Modal, Field, inputCls, Loading, EmptyState, fmtUSD, fmtDate } from '../components/UI.jsx';
-import { Plus, Download, Pencil } from 'lucide-react';
+import { Plus, Download, Pencil, FileText } from 'lucide-react';
 
 const ESTADOS = ['Borrador', 'Enviada', 'En negociacion', 'Aceptada', 'Rechazada', 'Vencida'];
 const MAX_ITEMS = 5;
+
+// Títulos por defecto de la tabla de productos del cotizador — se pueden editar
+// por cotización (queda guardado junto con esa cotización) y viajan tal cual al PDF.
+const DEFAULT_ITEM_HEADERS = {
+  producto: 'Producto', cantidad: 'Cantidad', precio_lista: 'Precio lista',
+  descuento: 'Desc. (%)', precio_desc: 'Precio c/desc', financiado: 'Financiado', subtotal: 'Subtotal',
+};
 
 export default function Quotes() {
   const [params] = useSearchParams();
   const [rows, setRows] = useState([]);
   const [clients, setClients] = useState([]);
   const [products, setProducts] = useState([]);
+  const [defaultCondiciones, setDefaultCondiciones] = useState('');
   const [loading, setLoading] = useState(true);
   const [estado, setEstado] = useState('');
   const [showNew, setShowNew] = useState(!!params.get('client_id'));
@@ -20,14 +28,16 @@ export default function Quotes() {
 
   async function load() {
     setLoading(true);
-    const [q, c, p] = await Promise.all([
+    const [q, c, p, s] = await Promise.all([
       api.get('/quotes', { params: estado ? { estado } : {} }),
       api.get('/clients', { params: { pageSize: 200 } }),
       api.get('/products'),
+      api.get('/dashboard/settings'),
     ]);
     setRows(q.data);
     setClients(c.data.rows);
     setProducts(p.data);
+    setDefaultCondiciones(s.data.condiciones_comerciales_default || '');
     setLoading(false);
   }
   useEffect(() => { load(); }, [estado]);
@@ -105,6 +115,7 @@ export default function Quotes() {
           clients={clients}
           products={products}
           defaultClientId={params.get('client_id')}
+          defaultCondiciones={defaultCondiciones}
           onClose={() => setShowNew(false)}
           onSaved={() => { setShowNew(false); load(); }}
         />
@@ -121,22 +132,38 @@ export default function Quotes() {
               <Badge text={detail.estado} />
             </div>
             <table className="w-full text-sm">
-              <thead className="text-xs text-gray-400 uppercase"><tr><th className="text-left py-1">Producto</th><th className="text-right py-1">Cant.</th><th className="text-right py-1">Precio (U$)</th><th className="text-right py-1">Desc.</th><th className="text-right py-1">Importe (U$)</th></tr></thead>
+              <thead className="text-xs text-gray-400 uppercase">
+                <tr>
+                  <th className="text-left py-1">{detail.item_headers?.producto || 'Producto'}</th>
+                  <th className="text-right py-1">Cant.</th>
+                  <th className="text-right py-1">{detail.item_headers?.precio_lista || 'Precio lista'}</th>
+                  <th className="text-right py-1">{detail.item_headers?.financiado || 'Financiado'}</th>
+                  <th className="text-right py-1">{detail.item_headers?.subtotal || 'Subtotal'}</th>
+                </tr>
+              </thead>
               <tbody>
                 {detail.items.map(it => (
                   <tr key={it.id} className="border-t border-gray-50">
                     <td className="py-1.5">{it.descripcion}</td>
                     <td className="py-1.5 text-right">{it.cantidad}</td>
-                    <td className="py-1.5 text-right">{fmtUSD(it.precio_unitario)}</td>
-                    <td className="py-1.5 text-right">{it.descuento}%</td>
+                    <td className="py-1.5 text-right">{fmtUSD(it.precio_unitario)}{it.descuento ? ` (-${it.descuento}%)` : ''}</td>
+                    <td className="py-1.5 text-right">{it.financiado ? fmtUSD(it.financiado) : '—'}</td>
                     <td className="py-1.5 text-right">{fmtUSD(it.importe)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
             <div className="text-right font-semibold">Total: {fmtUSD(detail.total)}</div>
+            {detail.total_financiado > 0 && <div className="text-right text-sm text-gray-500">Total financiado: {fmtUSD(detail.total_financiado)}</div>}
+            {detail.condiciones_comerciales && (
+              <div className="text-sm bg-gray-50 rounded-md p-3">
+                <div className="text-xs font-semibold text-gray-600 mb-1">Condiciones comerciales</div>
+                <div className="text-gray-600 whitespace-pre-wrap">{detail.condiciones_comerciales}</div>
+              </div>
+            )}
             {detail.observaciones && <div className="text-sm text-gray-500 italic">{detail.observaciones}</div>}
             <div className="flex flex-wrap gap-2 justify-end pt-2 border-t border-gray-100">
+              <Button variant="secondary" onClick={() => window.open(`/api/quotes/${detail.id}/pdf`, '_blank')}><FileText size={13} className="inline mr-1" /> Descargar PDF</Button>
               <Button variant="secondary" onClick={() => setEditing(true)}><Pencil size={13} className="inline mr-1" /> Editar cotización</Button>
               {ESTADOS.filter(s => s !== detail.estado).map(s => (
                 <Button key={s} variant="secondary" onClick={() => changeStatus(detail.id, s)}>Marcar {s}</Button>
@@ -152,6 +179,7 @@ export default function Quotes() {
           clients={clients}
           products={products}
           editingQuote={detail}
+          defaultCondiciones={defaultCondiciones}
           onClose={() => setEditing(false)}
           onSaved={() => { setEditing(false); setDetail(null); load(); }}
         />
@@ -160,22 +188,29 @@ export default function Quotes() {
   );
 }
 
-function QuoteFormModal({ clients, products, defaultClientId, editingQuote, onClose, onSaved }) {
+function emptyItem() { return { product_id: '', descripcion: '', cantidad: 1, precio_unitario: 0, descuento: 0, financiado: 0 }; }
+
+function QuoteFormModal({ clients, products, defaultClientId, defaultCondiciones, editingQuote, onClose, onSaved }) {
   const isEditing = !!editingQuote;
   const [clientId, setClientId] = useState(editingQuote?.client_id || defaultClientId || '');
   const [fechaVencimiento, setFechaVencimiento] = useState(editingQuote?.fecha_vencimiento?.slice(0, 10) || '');
   const [responsable, setResponsable] = useState(editingQuote?.responsable || '');
   const [observaciones, setObservaciones] = useState(editingQuote?.observaciones || '');
+  const [condicionesComerciales, setCondicionesComerciales] = useState(
+    editingQuote?.condiciones_comerciales ?? defaultCondiciones ?? ''
+  );
+  const [headers, setHeaders] = useState({ ...DEFAULT_ITEM_HEADERS, ...(editingQuote?.item_headers || {}) });
   const [items, setItems] = useState(
     editingQuote?.items?.length
-      ? editingQuote.items.map(it => ({ product_id: it.product_id || '', descripcion: it.descripcion, cantidad: it.cantidad, precio_unitario: it.precio_unitario, descuento: it.descuento || 0 }))
-      : [{ product_id: '', descripcion: '', cantidad: 1, precio_unitario: 0, descuento: 0 }]
+      ? editingQuote.items.map(it => ({ product_id: it.product_id || '', descripcion: it.descripcion, cantidad: it.cantidad, precio_unitario: it.precio_unitario, descuento: it.descuento || 0, financiado: it.financiado || 0 }))
+      : [emptyItem()]
   );
 
   function updateItem(i, patch) {
     setItems(prev => prev.map((it, idx) => idx === i ? { ...it, ...patch } : it));
   }
-  function addItem() { if (items.length < MAX_ITEMS) setItems(prev => [...prev, { product_id: '', descripcion: '', cantidad: 1, precio_unitario: 0, descuento: 0 }]); }
+  function updateHeader(key, value) { setHeaders(prev => ({ ...prev, [key]: value })); }
+  function addItem() { if (items.length < MAX_ITEMS) setItems(prev => [...prev, emptyItem()]); }
   function removeItem(i) { setItems(prev => prev.filter((_, idx) => idx !== i)); }
   function selectProduct(i, productId) {
     const prod = products.find(p => String(p.id) === productId);
@@ -183,21 +218,26 @@ function QuoteFormModal({ clients, products, defaultClientId, editingQuote, onCl
   }
 
   const total = items.reduce((s, it) => s + (Number(it.cantidad) * Number(it.precio_unitario) * (1 - (Number(it.descuento) || 0) / 100)), 0);
+  const totalFinanciado = items.reduce((s, it) => s + (Number(it.cantidad) * (Number(it.financiado) || 0)), 0);
   const clienteActual = clients.find(c => String(c.id) === String(clientId));
 
   async function save(e) {
     e.preventDefault();
     if (!clientId) return alert('Seleccioná un cliente');
+    const payload = { fecha_vencimiento: fechaVencimiento, items, responsable, observaciones, condiciones_comerciales: condicionesComerciales, item_headers: headers, usuario: 'Usuario' };
     if (isEditing) {
-      await api.put(`/quotes/${editingQuote.id}`, { fecha_vencimiento: fechaVencimiento, items, responsable, observaciones, usuario: 'Usuario' });
+      await api.put(`/quotes/${editingQuote.id}`, payload);
     } else {
-      await api.post('/quotes', { client_id: clientId, fecha_vencimiento: fechaVencimiento, items, responsable, observaciones, usuario: 'Usuario' });
+      await api.post('/quotes', { client_id: clientId, ...payload });
     }
     onSaved();
   }
 
+  const headerInputCls = 'w-full bg-transparent text-[11px] font-semibold uppercase text-white placeholder-green-100 focus:outline-none focus:bg-green-800/40 rounded px-1 py-0.5';
+  const cellInputCls = 'w-full px-1.5 py-1 text-sm rounded border border-transparent hover:border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400';
+
   return (
-    <Modal open onClose={onClose} title={isEditing ? `Editar cotización ${editingQuote.numero}` : 'Nueva cotización'} width="max-w-3xl">
+    <Modal open onClose={onClose} title={isEditing ? `Editar cotización ${editingQuote.numero}` : 'Nueva cotización'} width="max-w-5xl">
       <form onSubmit={save}>
         <div className="grid grid-cols-3 gap-3">
           <Field label="Cliente *">
@@ -214,22 +254,51 @@ function QuoteFormModal({ clients, products, defaultClientId, editingQuote, onCl
           <Field label="Responsable"><input className={inputCls} value={responsable} onChange={e => setResponsable(e.target.value)} /></Field>
         </div>
 
-        <div className="mt-2">
-          <div className="text-xs font-medium text-gray-600 mb-1">Productos (hasta {MAX_ITEMS})</div>
-          <div className="space-y-2">
-            {items.map((it, i) => (
-              <div key={i} className="grid grid-cols-12 gap-2 items-center">
-                <select className={inputCls + ' col-span-4'} value={it.product_id} onChange={e => selectProduct(i, e.target.value)}>
-                  <option value="">Producto libre...</option>
-                  {products.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
-                </select>
-                <input className={inputCls + ' col-span-3'} placeholder="Descripción" value={it.descripcion} onChange={e => updateItem(i, { descripcion: e.target.value })} />
-                <input type="number" className={inputCls + ' col-span-1'} placeholder="Cant." value={it.cantidad} onChange={e => updateItem(i, { cantidad: e.target.value })} />
-                <input type="number" className={inputCls + ' col-span-2'} placeholder="Precio" value={it.precio_unitario} onChange={e => updateItem(i, { precio_unitario: e.target.value })} />
-                <input type="number" className={inputCls + ' col-span-1'} placeholder="Desc %" value={it.descuento} onChange={e => updateItem(i, { descuento: e.target.value })} />
-                <button type="button" onClick={() => removeItem(i)} className="col-span-1 text-red-500 text-xs">✕</button>
-              </div>
-            ))}
+        <div className="mt-3">
+          <div className="text-xs font-medium text-gray-600 mb-1">
+            Productos (hasta {MAX_ITEMS}) — elegí uno de la lista precargada o escribí uno libre; los títulos de columna también se pueden editar.
+          </div>
+          <div className="overflow-x-auto rounded-md border border-gray-200">
+            <table className="w-full text-sm min-w-[900px]">
+              <thead style={{ backgroundColor: '#1e5f3c' }}>
+                <tr>
+                  <th className="text-left px-2 py-1.5 w-[230px]"><input className={headerInputCls} value={headers.producto} onChange={e => updateHeader('producto', e.target.value)} /></th>
+                  <th className="text-right px-2 py-1.5 w-[80px]"><input className={headerInputCls + ' text-right'} value={headers.cantidad} onChange={e => updateHeader('cantidad', e.target.value)} /></th>
+                  <th className="text-right px-2 py-1.5 w-[115px]"><input className={headerInputCls + ' text-right'} value={headers.precio_lista} onChange={e => updateHeader('precio_lista', e.target.value)} /></th>
+                  <th className="text-right px-2 py-1.5 w-[85px]"><input className={headerInputCls + ' text-right'} value={headers.descuento} onChange={e => updateHeader('descuento', e.target.value)} /></th>
+                  <th className="text-right px-2 py-1.5 w-[115px]"><input className={headerInputCls + ' text-right'} value={headers.precio_desc} onChange={e => updateHeader('precio_desc', e.target.value)} /></th>
+                  <th className="text-right px-2 py-1.5 w-[115px]"><input className={headerInputCls + ' text-right'} value={headers.financiado} onChange={e => updateHeader('financiado', e.target.value)} /></th>
+                  <th className="text-right px-2 py-1.5 w-[115px]"><input className={headerInputCls + ' text-right'} value={headers.subtotal} onChange={e => updateHeader('subtotal', e.target.value)} /></th>
+                  <th className="w-[30px]"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((it, i) => {
+                  const precioDesc = Number(it.precio_unitario) * (1 - (Number(it.descuento) || 0) / 100);
+                  const importe = Number(it.cantidad) * precioDesc;
+                  return (
+                    <tr key={i} className="border-t border-gray-100">
+                      <td className="px-2 py-1 align-top">
+                        <select className={cellInputCls + ' mb-1'} value={it.product_id} onChange={e => selectProduct(i, e.target.value)}>
+                          <option value="">Producto libre...</option>
+                          {products.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                        </select>
+                        <input className={cellInputCls} placeholder="Descripción" value={it.descripcion} onChange={e => updateItem(i, { descripcion: e.target.value })} />
+                      </td>
+                      <td className="px-2 py-1 align-top"><input type="number" step="any" className={cellInputCls + ' text-right'} value={it.cantidad} onChange={e => updateItem(i, { cantidad: e.target.value })} /></td>
+                      <td className="px-2 py-1 align-top"><input type="number" step="any" className={cellInputCls + ' text-right'} value={it.precio_unitario} onChange={e => updateItem(i, { precio_unitario: e.target.value })} /></td>
+                      <td className="px-2 py-1 align-top"><input type="number" step="any" className={cellInputCls + ' text-right'} value={it.descuento} onChange={e => updateItem(i, { descuento: e.target.value })} /></td>
+                      <td className="px-2 py-1 align-top text-right text-gray-500">{fmtUSD(precioDesc)}</td>
+                      <td className="px-2 py-1 align-top"><input type="number" step="any" className={cellInputCls + ' text-right'} value={it.financiado} onChange={e => updateItem(i, { financiado: e.target.value })} /></td>
+                      <td className="px-2 py-1 align-top text-right font-medium text-gray-700">{fmtUSD(importe)}</td>
+                      <td className="px-2 py-1 align-top text-center">
+                        <button type="button" onClick={() => removeItem(i)} className="text-red-400 hover:text-red-600 text-xs">✕</button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
           {items.length < MAX_ITEMS ? (
             <button type="button" onClick={addItem} className="text-xs text-blue-600 mt-2 hover:underline">+ Agregar producto</button>
@@ -238,9 +307,15 @@ function QuoteFormModal({ clients, products, defaultClientId, editingQuote, onCl
           )}
         </div>
 
+        <Field label="Condiciones comerciales">
+          <textarea className={inputCls} rows={3} value={condicionesComerciales} onChange={e => setCondicionesComerciales(e.target.value)} placeholder="Forma de pago, plazos de entrega, validez, etc." />
+        </Field>
         <Field label="Observaciones"><textarea className={inputCls} rows={2} value={observaciones} onChange={e => setObservaciones(e.target.value)} /></Field>
 
-        <div className="text-right font-semibold text-lg mt-2">Total: {fmtUSD(total)}</div>
+        <div className="text-right mt-2">
+          <div className="font-semibold text-lg">Total: {fmtUSD(total)}</div>
+          {totalFinanciado > 0 && <div className="text-sm text-gray-500">Total financiado: {fmtUSD(totalFinanciado)}</div>}
+        </div>
 
         <div className="flex justify-end gap-2 mt-3">
           <Button variant="secondary" type="button" onClick={onClose}>Cancelar</Button>
