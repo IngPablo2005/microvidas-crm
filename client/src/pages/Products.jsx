@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import api from '../api/client.js';
 import { Card, Badge, Button, Modal, Field, inputCls, Loading, EmptyState, fmtUSD } from '../components/UI.jsx';
-import { Plus, Upload, Pencil, Trash2, RotateCcw, Image as ImageIcon } from 'lucide-react';
+import { Plus, Pencil, Trash2, RotateCcw, Image as ImageIcon } from 'lucide-react';
 
 export default function Products() {
   const [products, setProducts] = useState([]);
@@ -10,7 +10,6 @@ export default function Products() {
   const [showInactive, setShowInactive] = useState(false);
   const [showNewProduct, setShowNewProduct] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
-  const [showImport, setShowImport] = useState(false);
   const [editingProveedor, setEditingProveedor] = useState(null);
 
   async function load() {
@@ -62,7 +61,6 @@ export default function Products() {
           <p className="text-sm text-gray-500">{visibleProducts.length} productos · usado en Cotizaciones y Ventas</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="secondary" onClick={() => setShowImport(true)}><Upload size={14} className="inline mr-1" /> Importar lista de precios (PDF)</Button>
           <Button onClick={() => setShowNewProduct(true)}><Plus size={14} className="inline mr-1" /> Nuevo producto</Button>
         </div>
       </div>
@@ -143,10 +141,6 @@ export default function Products() {
           onClose={() => setEditingProveedor(null)}
           onSaved={() => { setEditingProveedor(null); load(); }}
         />
-      )}
-
-      {showImport && (
-        <ImportPriceListModal onClose={() => setShowImport(false)} onImported={() => { setShowImport(false); load(); }} />
       )}
     </div>
   );
@@ -241,144 +235,3 @@ function ProveedorFormModal({ proveedor, onClose, onSaved }) {
   );
 }
 
-function ImportPriceListModal({ onClose, onImported }) {
-  const [step, setStep] = useState('upload'); // upload | analyzing | review
-  const [error, setError] = useState('');
-  const [file, setFile] = useState(null);
-  const [preview, setPreview] = useState(null); // { proveedor, moneda, productos, logo_data_url }
-  const [saving, setSaving] = useState(false);
-  const logoFileRef = useRef(null);
-
-  async function analyze(e) {
-    e.preventDefault();
-    if (!file) return;
-    setError('');
-    setStep('analyzing');
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      const { data } = await api.post('/products/import-pricelist/preview', formData);
-      setPreview(data);
-      setStep('review');
-    } catch (err) {
-      setError(err?.response?.data?.error || 'No se pudo interpretar el PDF. Probá de nuevo.');
-      setStep('upload');
-    }
-  }
-
-  function updatePreview(patch) { setPreview(p => ({ ...p, ...patch })); }
-  function updateItem(i, patch) { setPreview(p => ({ ...p, productos: p.productos.map((it, idx) => idx === i ? { ...it, ...patch } : it) })); }
-  function removeItem(i) { setPreview(p => ({ ...p, productos: p.productos.filter((_, idx) => idx !== i) })); }
-  function addItem() { setPreview(p => ({ ...p, productos: [...p.productos, { nombre: '', categoria: '', precio_unitario: 0 }] })); }
-
-  function onLogoFile(e) {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    const reader = new FileReader();
-    reader.onload = () => updatePreview({ logo_data_url: reader.result });
-    reader.readAsDataURL(f);
-  }
-
-  async function confirm() {
-    setSaving(true);
-    setError('');
-    try {
-      const { data } = await api.post('/products/import-pricelist/confirm', preview);
-      setSaving(false);
-      alert(`Se importaron ${data.count} producto(s) del proveedor "${preview.proveedor}".`);
-      onImported();
-    } catch (err) {
-      setSaving(false);
-      setError(err?.response?.data?.error || 'No se pudo guardar la importación.');
-    }
-  }
-
-  return (
-    <Modal open onClose={onClose} title="Importar lista de precios (PDF)" width="max-w-3xl">
-      {step === 'upload' && (
-        <form onSubmit={analyze} className="space-y-3">
-          <p className="text-sm text-gray-500">
-            Subí el PDF de la lista de precios de un proveedor. La IA va a leer los productos, el precio de lista y va a intentar
-            detectar el logo del proveedor. Vas a poder revisar y corregir todo antes de que se guarde en el catálogo.
-          </p>
-          <input
-            type="file" accept="application/pdf" required
-            onChange={e => setFile(e.target.files?.[0] || null)}
-            className="block w-full text-sm text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200"
-          />
-          {error && <div className="text-sm text-red-600 bg-red-50 rounded-md p-2">{error}</div>}
-          <div className="flex justify-end gap-2">
-            <Button variant="secondary" type="button" onClick={onClose}>Cancelar</Button>
-            <Button type="submit" disabled={!file}>Analizar con IA</Button>
-          </div>
-        </form>
-      )}
-
-      {step === 'analyzing' && (
-        <div className="py-10 text-center text-sm text-gray-500">
-          <Loading />
-          Leyendo el PDF y detectando productos... puede tardar unos segundos.
-        </div>
-      )}
-
-      {step === 'review' && preview && (
-        <div className="space-y-3">
-          <div className="grid grid-cols-3 gap-3 items-end">
-            <Field label="Proveedor"><input className={inputCls} value={preview.proveedor} onChange={e => updatePreview({ proveedor: e.target.value })} /></Field>
-            <Field label="Moneda">
-              <select className={inputCls} value={preview.moneda} onChange={e => updatePreview({ moneda: e.target.value })}>
-                <option value="USD">USD</option>
-                <option value="ARS">ARS</option>
-              </select>
-            </Field>
-            <Field label="Logo detectado">
-              <div className="flex items-center gap-2">
-                {preview.logo_data_url ? (
-                  <img src={preview.logo_data_url} alt="" className="h-9 max-w-[110px] object-contain border border-gray-100 rounded" />
-                ) : (
-                  <div className="text-xs text-gray-400">No se detectó ninguno.</div>
-                )}
-                <Button type="button" variant="secondary" onClick={() => logoFileRef.current?.click()}>{preview.logo_data_url ? 'Cambiar' : 'Subir logo'}</Button>
-                <input ref={logoFileRef} type="file" accept="image/*" className="hidden" onChange={onLogoFile} />
-              </div>
-            </Field>
-          </div>
-
-          <div className="text-xs font-medium text-gray-600">Productos detectados ({preview.productos.length}) — revisá y corregí antes de importar.</div>
-          <div className="overflow-x-auto rounded-md border border-gray-200 max-h-80 overflow-y-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-xs text-gray-400 uppercase sticky top-0">
-                <tr>
-                  <th className="text-left px-2 py-1.5">Producto</th>
-                  <th className="text-left px-2 py-1.5">Categoría</th>
-                  <th className="text-right px-2 py-1.5">Precio</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {preview.productos.map((p, i) => (
-                  <tr key={i} className="border-t border-gray-100">
-                    <td className="px-2 py-1"><input className={inputCls} value={p.nombre} onChange={e => updateItem(i, { nombre: e.target.value })} /></td>
-                    <td className="px-2 py-1"><input className={inputCls} value={p.categoria} onChange={e => updateItem(i, { categoria: e.target.value })} /></td>
-                    <td className="px-2 py-1"><input type="number" step="any" className={inputCls + ' text-right'} value={p.precio_unitario} onChange={e => updateItem(i, { precio_unitario: e.target.value })} /></td>
-                    <td className="px-2 py-1 text-center"><button type="button" onClick={() => removeItem(i)} className="text-red-400 hover:text-red-600 text-xs">✕</button></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <button type="button" onClick={addItem} className="text-xs text-blue-600 hover:underline">+ Agregar producto</button>
-
-          {error && <div className="text-sm text-red-600 bg-red-50 rounded-md p-2">{error}</div>}
-
-          <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
-            <Button variant="secondary" type="button" onClick={() => setStep('upload')}>Volver</Button>
-            <Button type="button" onClick={confirm} disabled={saving || preview.productos.length === 0}>
-              {saving ? 'Guardando...' : `Confirmar e importar (${preview.productos.length})`}
-            </Button>
-          </div>
-        </div>
-      )}
-    </Modal>
-  );
-}
