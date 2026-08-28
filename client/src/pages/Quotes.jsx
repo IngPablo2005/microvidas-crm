@@ -4,6 +4,8 @@ import api from '../api/client.js';
 import { Card, Badge, Button, Modal, Field, inputCls, Loading, EmptyState, fmtUSD, fmtDate } from '../components/UI.jsx';
 import { Plus, Download, Pencil, FileText } from 'lucide-react';
 
+const LOGO_SRC = '/branding/microvidas-logo.png';
+
 const ESTADOS = ['Borrador', 'Enviada', 'En negociacion', 'Aceptada', 'Rechazada', 'Vencida'];
 const MAX_ITEMS = 5;
 
@@ -64,9 +66,12 @@ export default function Quotes() {
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-xl font-semibold text-gray-800">Cotizaciones</h1>
-          <p className="text-sm text-gray-500">{rows.length} cotizaciones</p>
+        <div className="flex items-center gap-3">
+          <img src={LOGO_SRC} alt="Microvidas" className="h-8 hidden sm:block" />
+          <div>
+            <h1 className="text-xl font-semibold text-gray-800">Cotizaciones</h1>
+            <p className="text-sm text-gray-500">{rows.length} cotizaciones</p>
+          </div>
         </div>
         <div className="flex gap-2">
           <Button variant="secondary" onClick={() => window.open('/api/export/quotes?format=xlsx', '_blank')}><Download size={14} className="inline mr-1" /> Exportar</Button>
@@ -124,10 +129,11 @@ export default function Quotes() {
       {detail && !editing && (
         <Modal open onClose={() => setDetail(null)} title={`Cotización ${detail.numero}`} width="max-w-2xl">
           <div className="space-y-3">
-            <div className="flex justify-between text-sm">
+            <div className="flex justify-between items-start">
               <div>
-                <div className="font-medium text-gray-800">{detail.cliente_nombre}</div>
-                <div className="text-gray-400">Vence: {fmtDate(detail.fecha_vencimiento)} · Responsable: {detail.responsable}</div>
+                <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Empresa</div>
+                <div className="text-lg font-semibold text-gray-800 leading-tight">{detail.cliente_nombre}</div>
+                <div className="text-gray-400 text-sm mt-0.5">Vence: {fmtDate(detail.fecha_vencimiento)} · Responsable: {detail.responsable}</div>
               </div>
               <Badge text={detail.estado} />
             </div>
@@ -239,6 +245,12 @@ function QuoteFormModal({ clients, products, defaultClientId, defaultCondiciones
   return (
     <Modal open onClose={onClose} title={isEditing ? `Editar cotización ${editingQuote.numero}` : 'Nueva cotización'} width="max-w-5xl">
       <form onSubmit={save}>
+        {clienteActual && (
+          <div className="mb-3">
+            <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Empresa</div>
+            <div className="text-lg font-semibold text-gray-800 leading-tight">{clienteActual.razon_social}</div>
+          </div>
+        )}
         <div className="grid grid-cols-3 gap-3">
           <Field label="Cliente *">
             {isEditing ? (

@@ -1,7 +1,12 @@
 import express from 'express';
 import PDFDocument from 'pdfkit';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import db from '../db.js';
 import { logActivity, genNumber } from '../helpers.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const LOGO_PATH = path.join(__dirname, '..', 'assets', 'microvidas-logo.png');
 
 const router = express.Router();
 
@@ -152,25 +157,33 @@ router.get('/:id/pdf', async (req, res) => {
 
   const left = 30, right = doc.page.width - 30;
 
-  // Encabezado
-  doc.fontSize(18).fillColor(GREEN).font('Helvetica-Bold').text('MICROVIDAS', left, 32);
-  doc.fontSize(8).fillColor(GREEN_LIGHT).font('Helvetica').text('AGROBIOTECNOLOGÍA', left, 52);
+  // Encabezado — logo real de Microvidas (en vez del texto "MICROVIDAS" simulado)
+  try {
+    doc.image(LOGO_PATH, left, 26, { height: 34 });
+  } catch {
+    // si el archivo del logo no está disponible, no se corta la generación del PDF
+    doc.fontSize(18).fillColor(GREEN).font('Helvetica-Bold').text('MICROVIDAS', left, 32);
+    doc.fontSize(8).fillColor(GREEN_LIGHT).font('Helvetica').text('AGROBIOTECNOLOGÍA', left, 52);
+  }
   doc.fontSize(20).fillColor(GREEN).font('Helvetica-Bold').text('Cotización', left, 30, { align: 'right', width: right - left });
   doc.fontSize(9).fillColor('#6b7280').font('Helvetica').text(new Date(quote.fecha).toLocaleDateString('es-AR'), left, 56, { align: 'right', width: right - left });
 
   doc.moveTo(left, 78).lineTo(right, 78).strokeColor('#d1d5db').stroke();
 
-  // Datos del cliente / cotización
-  let y = 92;
-  doc.fontSize(9).fillColor('#374151').font('Helvetica-Bold').text('Para:', left, y);
-  doc.font('Helvetica').text(quote.cliente_nombre || '', left + 55, y);
-  doc.font('Helvetica-Bold').text('N°:', left + 300, y);
-  doc.font('Helvetica').text(quote.numero, left + 330, y);
-  y += 16;
-  doc.font('Helvetica-Bold').text('Validez:', left, y);
-  doc.font('Helvetica').text(quote.fecha_vencimiento ? new Date(quote.fecha_vencimiento).toLocaleDateString('es-AR') : 'A convenir', left + 55, y);
-  doc.font('Helvetica-Bold').text('Vendedor:', left + 300, y);
-  doc.font('Helvetica').text(quote.responsable || '—', left + 355, y);
+  // Título con la empresa destinataria — a quién se le está cotizando
+  let y = 90;
+  doc.fontSize(9).fillColor('#9ca3af').font('Helvetica').text('EMPRESA', left, y);
+  y += 12;
+  doc.fontSize(14).fillColor('#111827').font('Helvetica-Bold').text(quote.cliente_nombre || '—', left, y);
+  y += 22;
+
+  // Datos de la cotización
+  doc.fontSize(9).fillColor('#374151').font('Helvetica-Bold').text('N°:', left, y);
+  doc.font('Helvetica').text(quote.numero, left + 25, y);
+  doc.font('Helvetica-Bold').text('Validez:', left + 150, y);
+  doc.font('Helvetica').text(quote.fecha_vencimiento ? new Date(quote.fecha_vencimiento).toLocaleDateString('es-AR') : 'A convenir', left + 195, y);
+  doc.font('Helvetica-Bold').text('Vendedor:', left + 330, y);
+  doc.font('Helvetica').text(quote.responsable || '—', left + 385, y);
   y += 24;
 
   // Tabla de productos — Producto | Cantidad | Precio lista | Precio c/desc | Financiado | Subtotal

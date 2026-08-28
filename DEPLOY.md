@@ -66,6 +66,19 @@ Esto borra clientes, prospectos, ventas, cotizaciones, pipeline, tareas, calenda
 
 Los usuarios de ejemplo (Lucía Fernández, Martín Gómez, Sofía Ramírez, Consulta Directorio) quedan cargados con la contraseña `microvidas2026`; podés desactivarlos o cambiarles el rol desde Configuración → Usuarios dentro de la app, o dejarlos y renombrarlos para tu equipo real.
 
+## Activar el importador de listas de precios con IA (opcional)
+
+Desde Catálogo → "Importar lista de precios (PDF)" se puede subir el PDF de un proveedor y que la IA cargue los productos solos. Para que esto funcione hay que darle al servidor una clave de la API de Anthropic (la misma empresa de Claude):
+
+1. Entrá a [console.anthropic.com](https://console.anthropic.com) y creá una cuenta (o iniciá sesión) → sección **"API Keys"** → "Create Key". Vas a necesitar cargar una forma de pago ahí (esta API se cobra por uso, aparte de tu suscripción a Claude); el costo por cada PDF analizado es de centavos de dólar.
+2. Copiá la clave que empieza con `sk-ant-...`.
+3. En Render, entrá al servicio → **"Environment"** → "Add Environment Variable":
+   - Nombre: `ANTHROPIC_API_KEY`
+   - Valor: la clave que copiaste.
+4. Guardá — Render redespliega solo con la variable ya disponible.
+
+Si no configurás esta variable, el resto del CRM funciona exactamente igual; sólo el botón de "Importar lista de precios (PDF)" va a mostrar un aviso pidiendo que se configure. Los productos se pueden seguir cargando a mano en cualquier momento con "+ Nuevo producto".
+
 ## Cómo se actualiza de ahí en adelante
 
 - **Cuando te haga una mejora en una sesión como esta**, te paso el zip actualizado y hacés los dos clics en GitHub Desktop ("Commit to main" → "Push origin") descriptos en el Paso 3. En cuanto el push llega a GitHub, Render detecta el cambio y redespliega solo — no hay que tocar nada en Render.

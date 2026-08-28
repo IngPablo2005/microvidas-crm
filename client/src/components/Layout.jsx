@@ -2,7 +2,7 @@ import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
 import {
   LayoutDashboard, Users, Target, GitBranch, FileText, ShoppingCart, CheckSquare,
-  Calendar, Activity, Award, BarChart3, Upload, Settings, Search, LogOut, Wallet, X, Menu, Bell
+  Calendar, Activity, Award, BarChart3, Upload, Settings, Search, LogOut, Wallet, X, Menu, Bell, Package
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import api from '../api/client.js';
@@ -13,6 +13,7 @@ const NAV = [
   { to: '/prospectos', label: 'Prospectos', icon: Target },
   { to: '/pipeline', label: 'Pipeline', icon: GitBranch },
   { to: '/cotizaciones', label: 'Cotizaciones', icon: FileText },
+  { to: '/productos', label: 'Catálogo', icon: Package },
   { to: '/ventas', label: 'Ventas', icon: ShoppingCart },
   { to: '/cobranzas', label: 'Cobranzas', icon: Wallet },
   { to: '/tareas', label: 'Tareas', icon: CheckSquare },
@@ -118,7 +119,7 @@ export default function Layout() {
                 <SearchGroup title="Cotizaciones" items={results.quotes} onClick={() => goTo('/cotizaciones')} render={q => `${q.numero} — ${q.razon_social}`} />
                 <SearchGroup title="Ventas" items={results.sales} onClick={() => goTo('/ventas')} render={s => `${s.numero} — ${s.razon_social}`} />
                 <SearchGroup title="Tareas" items={results.tasks} onClick={() => goTo('/tareas')} render={t => t.titulo} />
-                <SearchGroup title="Productos" items={results.products} onClick={() => goTo('/cotizaciones')} render={p => p.nombre} />
+                <SearchGroup title="Productos" items={results.products} onClick={() => goTo('/productos')} render={p => p.nombre} />
                 {Object.values(results).every(arr => !arr.length) && <div className="px-3 py-3 text-gray-400">Sin resultados</div>}
               </div>
             )}

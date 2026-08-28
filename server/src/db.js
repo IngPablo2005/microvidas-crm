@@ -123,6 +123,13 @@ CREATE TABLE IF NOT EXISTS prospects (
   updated_at TEXT DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS proveedores (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  nombre TEXT NOT NULL UNIQUE,
+  logo_data_url TEXT, -- logo del proveedor/marca, guardado como data URL (base64) para no depender del disco efímero de Render
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS products (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   nombre TEXT NOT NULL,
@@ -130,7 +137,8 @@ CREATE TABLE IF NOT EXISTS products (
   precio_unitario REAL DEFAULT 0,
   moneda TEXT DEFAULT 'USD',
   unidad TEXT DEFAULT 'unidad',
-  activo INTEGER DEFAULT 1
+  activo INTEGER DEFAULT 1,
+  proveedor_id INTEGER REFERENCES proveedores(id)
 );
 
 CREATE TABLE IF NOT EXISTS pipeline_opportunities (
@@ -360,6 +368,9 @@ CREATE INDEX IF NOT EXISTS idx_client_crops_client ON client_crops(client_id);
 
   const quoteItemCols = (await db.prepare("PRAGMA table_info(quote_items)").all()).map(c => c.name);
   if (!quoteItemCols.includes('financiado')) await exec('ALTER TABLE quote_items ADD COLUMN financiado REAL DEFAULT 0');
+
+  const productCols = (await db.prepare("PRAGMA table_info(products)").all()).map(c => c.name);
+  if (!productCols.includes('proveedor_id')) await exec('ALTER TABLE products ADD COLUMN proveedor_id INTEGER REFERENCES proveedores(id)');
 }
 
 export default db;

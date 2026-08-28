@@ -27,7 +27,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 
 app.use(cors());
-app.use(express.json({ limit: '5mb' }));
+// 12mb: deja margen para el JSON de confirmación de import de listas de precios,
+// que puede incluir el logo del proveedor como data URL (base64).
+app.use(express.json({ limit: '12mb' }));
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 app.use('/api/auth', authRoutes);

@@ -8,6 +8,7 @@ import ClientDetail from './pages/clients/ClientDetail.jsx';
 import Prospects from './pages/Prospects.jsx';
 import Pipeline from './pages/Pipeline.jsx';
 import Quotes from './pages/Quotes.jsx';
+import Products from './pages/Products.jsx';
 import Sales from './pages/Sales.jsx';
 import Tasks from './pages/Tasks.jsx';
 import CalendarPage from './pages/CalendarPage.jsx';
@@ -34,6 +35,7 @@ export default function App() {
             <Route path="prospectos" element={<Prospects />} />
             <Route path="pipeline" element={<Pipeline />} />
             <Route path="cotizaciones" element={<Quotes />} />
+            <Route path="productos" element={<Products />} />
             <Route path="ventas" element={<Sales />} />
             <Route path="cobranzas" element={<Collections />} />
             <Route path="tareas" element={<Tasks />} />
