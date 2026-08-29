@@ -257,13 +257,22 @@ router.get('/:id/pdf', async (req, res) => {
   y = drawHeaderRow(y);
 
   doc.font('Helvetica').fontSize(9);
+  // ¿Alguna línea tiene cantidad cargada? Si ninguna la tiene, el total queda en
+  // 0 sólo porque todas las líneas están anotadas sin comprometer un monto — en
+  // ese caso no tiene sentido mostrar "TOTAL: USD 0,00", así que se omite más abajo.
+  const hasAnyCantidad = items.some(it => it.cantidad !== null && it.cantidad !== undefined);
   for (const it of items) {
     if (y > doc.page.height - 160) { doc.addPage(); y = 40; y = drawHeaderRow(y); }
-    const rowH = 22;
     const sinCantidad = it.cantidad === null || it.cantidad === undefined;
     const precioDesc = Number(it.precio_unitario) * (1 - (Number(it.descuento) || 0) / 100);
+    const logoBuf = dataUrlToBuffer(it.producto_logo);
+    // Con logo cargado, la celda "Producto" muestra sólo el logo (sin el nombre al
+    // lado) para que se pueda dibujar bien grande y sea notable; sin logo, se
+    // muestra el nombre como antes. La fila se agranda cuando hay logo para que
+    // no quede aplastado contra el alto de una fila de sólo texto.
+    const rowH = logoBuf ? 34 : 22;
     const vals = [
-      it.descripcion || '',
+      logoBuf ? '' : (it.descripcion || ''),
       sinCantidad ? '—' : Number(it.cantidad).toLocaleString('es-AR'),
       fmtMoney(it.precio_unitario, moneda),
       fmtMoney(precioDesc, moneda),
@@ -272,21 +281,21 @@ router.get('/:id/pdf', async (req, res) => {
     ];
     let x = left;
     doc.fillColor('#1f2937');
-    const logoBuf = dataUrlToBuffer(it.producto_logo);
+    const textY = y + (rowH - 9) / 2;
     vals.forEach((v, i) => {
-      // Columna "producto": si el producto tiene logo cargado, se dibuja un
-      // ícono chico antes del nombre y el texto se corre para no superponerse.
       if (i === 0 && logoBuf) {
         try {
-          // fit con más ancho que alto: un logo apaisado (lo más común) se aplasta
-          // a una franja diminuta si se lo encierra en una caja cuadrada chica.
-          doc.image(logoBuf, x + 4, y + 4, { fit: [26, 14] });
-          doc.text(String(v), x + 34, y + 6, { width: cols[i].w - 38, align: cols[i].align });
+          doc.image(logoBuf, x + 4, y + 4, { fit: [cols[i].w - 8, rowH - 8] });
           x += cols[i].w;
           return;
-        } catch { /* si el logo no se puede decodificar, se dibuja el texto normal debajo */ }
+        } catch {
+          // si el logo no se puede decodificar, se dibuja el nombre en su lugar
+          doc.text(String(it.descripcion || ''), x + 4, textY, { width: cols[i].w - 8, align: cols[i].align });
+          x += cols[i].w;
+          return;
+        }
       }
-      doc.text(String(v), x + 4, y + 6, { width: cols[i].w - 8, align: cols[i].align });
+      doc.text(String(v), x + 4, textY, { width: cols[i].w - 8, align: cols[i].align });
       x += cols[i].w;
     });
     doc.moveTo(left, y + rowH).lineTo(left + tableWidth, y + rowH).strokeColor('#e5e7eb').stroke();
@@ -305,7 +314,7 @@ router.get('/:id/pdf', async (req, res) => {
     doc.fontSize(labelSize).text(label, left, y + (valueSize - labelSize) / 2 + 1, { width: tableWidth - valueW - 10, align: 'right', lineBreak: false });
     y += valueSize + 8;
   }
-  drawTotalLine('TOTAL', quote.total, 10, 16, GREEN);
+  if (hasAnyCantidad) drawTotalLine('TOTAL', quote.total, 10, 16, GREEN);
   if (quote.total_financiado > 0) drawTotalLine('TOTAL FINANCIADO', quote.total_financiado, 8, 11, '#6b7280');
 
   // Condiciones comerciales

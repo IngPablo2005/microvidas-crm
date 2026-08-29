@@ -107,16 +107,17 @@ export default function Products() {
                   {g.items.map(p => (
                     <tr key={p.id} className={`border-t border-gray-50 ${!p.activo ? 'opacity-50' : ''}`}>
                       <td className="py-1.5 px-2 pl-0">
-                        <div className="flex items-center gap-2">
-                          {p.logo_data_url ? (
-                            // Sin ancho fijo: un logo apaisado (lo más común) se aplasta a una
-                            // franja diminuta si se lo encierra en una caja cuadrada chica. Se
-                            // fija sólo el alto (a la altura del texto) y se deja un ancho máximo
-                            // generoso para que se note, igual que el logo de proveedor arriba.
-                            <img src={p.logo_data_url} alt="" className="h-6 max-w-[72px] object-contain rounded flex-shrink-0" />
-                          ) : null}
+                        {p.logo_data_url ? (
+                          // Si hay logo cargado se muestra sólo el logo (sin el nombre al lado)
+                          // para que se pueda ver bien grande y sea notable; el nombre queda
+                          // disponible al pasar el mouse. Sin ancho fijo: un logo apaisado (lo
+                          // más común) se aplasta a una franja diminuta si se lo encierra en una
+                          // caja cuadrada chica, así que se fija sólo el alto y se deja un ancho
+                          // máximo generoso, igual que el logo de proveedor arriba.
+                          <img src={p.logo_data_url} alt={p.nombre} title={p.nombre} className="h-8 max-w-[130px] object-contain rounded" />
+                        ) : (
                           <span>{p.nombre}</span>
-                        </div>
+                        )}
                       </td>
                       <td className="py-1.5 px-2 text-gray-500">{p.categoria || '—'}</td>
                       <td className="py-1.5 px-2 text-right">{fmtPrecio(p.precio_unitario)} <span className="text-gray-400">{p.moneda}</span></td>

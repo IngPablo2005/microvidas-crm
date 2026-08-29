@@ -173,10 +173,13 @@ export default function Quotes() {
                 {detail.items.map(it => (
                   <tr key={it.id} className="border-t border-gray-50">
                     <td className="py-1.5">
-                      <div className="flex items-center gap-1.5">
-                        {it.producto_logo && <img src={it.producto_logo} alt="" className="h-5 max-w-[60px] object-contain rounded flex-shrink-0" />}
+                      {it.producto_logo ? (
+                        // Sólo el logo cuando está cargado (sin el nombre al lado), para que
+                        // se vea grande; el nombre queda disponible al pasar el mouse.
+                        <img src={it.producto_logo} alt={it.descripcion} title={it.descripcion} className="h-7 max-w-[100px] object-contain rounded" />
+                      ) : (
                         <span>{it.descripcion}</span>
-                      </div>
+                      )}
                     </td>
                     <td className="py-1.5 text-right">{cantidadVacia(it.cantidad) ? '—' : it.cantidad}</td>
                     <td className="py-1.5 text-right">{fmtUSD(it.precio_unitario)}{it.descuento ? ` (-${it.descuento}%)` : ''}</td>
@@ -186,7 +189,9 @@ export default function Quotes() {
                 ))}
               </tbody>
             </table>
-            <div className="text-right font-semibold">Total: {fmtUSD(detail.total)}</div>
+            {detail.items.some(it => !cantidadVacia(it.cantidad)) && (
+              <div className="text-right font-semibold">Total: {fmtUSD(detail.total)}</div>
+            )}
             {detail.total_financiado > 0 && <div className="text-right text-sm text-gray-500">Total financiado: {fmtUSD(detail.total_financiado)}</div>}
             {detail.condiciones_comerciales && (
               <div className="text-sm bg-gray-50 rounded-md p-3">
@@ -272,6 +277,9 @@ function QuoteFormModal({ clients, products, defaultClientId, defaultCondiciones
 
   const total = items.reduce((s, it) => s + (cantidadVacia(it.cantidad) ? 0 : Number(it.cantidad) * Number(it.precio_unitario) * (1 - (Number(it.descuento) || 0) / 100)), 0);
   const totalFinanciado = items.reduce((s, it) => s + (cantidadVacia(it.cantidad) ? 0 : Number(it.cantidad) * (Number(it.financiado) || 0)), 0);
+  // Si ninguna línea tiene cantidad cargada, el total da 0 sólo porque todas están
+  // anotadas sin comprometer un monto — en ese caso no se muestra "Total: US$0".
+  const anyCantidad = items.some(it => !cantidadVacia(it.cantidad));
   const clienteActual = clients.find(c => String(c.id) === String(clientId));
 
   async function save(e) {
@@ -342,7 +350,7 @@ function QuoteFormModal({ clients, products, defaultClientId, defaultCondiciones
                       <td className="px-2 py-1 align-top">
                         <div className="flex items-center gap-1.5 mb-1">
                           {productoSeleccionado?.logo_data_url && (
-                            <img src={productoSeleccionado.logo_data_url} alt="" className="h-6 max-w-[64px] object-contain rounded flex-shrink-0" />
+                            <img src={productoSeleccionado.logo_data_url} alt="" className="h-8 max-w-[100px] object-contain rounded flex-shrink-0" />
                           )}
                           <select className={cellInputCls} value={it.product_id} onChange={e => selectProduct(i, e.target.value)}>
                             <option value="">Producto libre...</option>
@@ -386,10 +394,12 @@ function QuoteFormModal({ clients, products, defaultClientId, defaultCondiciones
           />
         </Field>
 
-        <div className="text-right mt-2">
-          <div className="font-semibold text-lg">Total: {fmtUSD(total)}</div>
-          {totalFinanciado > 0 && <div className="text-sm text-gray-500">Total financiado: {fmtUSD(totalFinanciado)}</div>}
-        </div>
+        {(anyCantidad || totalFinanciado > 0) && (
+          <div className="text-right mt-2">
+            {anyCantidad && <div className="font-semibold text-lg">Total: {fmtUSD(total)}</div>}
+            {totalFinanciado > 0 && <div className="text-sm text-gray-500">Total financiado: {fmtUSD(totalFinanciado)}</div>}
+          </div>
+        )}
 
         <div className="flex justify-end gap-2 mt-3">
           <Button variant="secondary" type="button" onClick={onClose}>Cancelar</Button>
