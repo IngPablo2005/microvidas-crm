@@ -278,8 +278,10 @@ router.get('/:id/pdf', async (req, res) => {
       // ícono chico antes del nombre y el texto se corre para no superponerse.
       if (i === 0 && logoBuf) {
         try {
-          doc.image(logoBuf, x + 4, y + 4, { width: 14, height: 14, fit: [14, 14] });
-          doc.text(String(v), x + 22, y + 6, { width: cols[i].w - 26, align: cols[i].align });
+          // fit con más ancho que alto: un logo apaisado (lo más común) se aplasta
+          // a una franja diminuta si se lo encierra en una caja cuadrada chica.
+          doc.image(logoBuf, x + 4, y + 4, { fit: [26, 14] });
+          doc.text(String(v), x + 34, y + 6, { width: cols[i].w - 38, align: cols[i].align });
           x += cols[i].w;
           return;
         } catch { /* si el logo no se puede decodificar, se dibuja el texto normal debajo */ }

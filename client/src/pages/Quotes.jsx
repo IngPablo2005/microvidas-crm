@@ -174,7 +174,7 @@ export default function Quotes() {
                   <tr key={it.id} className="border-t border-gray-50">
                     <td className="py-1.5">
                       <div className="flex items-center gap-1.5">
-                        {it.producto_logo && <img src={it.producto_logo} alt="" className="h-4 w-4 object-contain rounded flex-shrink-0" />}
+                        {it.producto_logo && <img src={it.producto_logo} alt="" className="h-5 max-w-[60px] object-contain rounded flex-shrink-0" />}
                         <span>{it.descripcion}</span>
                       </div>
                     </td>
@@ -342,7 +342,7 @@ function QuoteFormModal({ clients, products, defaultClientId, defaultCondiciones
                       <td className="px-2 py-1 align-top">
                         <div className="flex items-center gap-1.5 mb-1">
                           {productoSeleccionado?.logo_data_url && (
-                            <img src={productoSeleccionado.logo_data_url} alt="" className="h-5 w-5 object-contain rounded flex-shrink-0" />
+                            <img src={productoSeleccionado.logo_data_url} alt="" className="h-6 max-w-[64px] object-contain rounded flex-shrink-0" />
                           )}
                           <select className={cellInputCls} value={it.product_id} onChange={e => selectProduct(i, e.target.value)}>
                             <option value="">Producto libre...</option>

@@ -84,6 +84,14 @@ export function fmtUSD(n) {
   return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n || 0);
 }
 
+// A diferencia de fmtUSD (redondea a entero — pensado para totales grandes),
+// este formato conserva hasta 2 decimales sin redondearlos a un número entero.
+// Se usa para precios unitarios (ej. el Catálogo), donde un precio como 42.50
+// no debe mostrarse como "43".
+export function fmtPrecio(n) {
+  return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(n || 0);
+}
+
 export function fmtDate(d) {
   if (!d) return '—';
   try { return new Date(d).toLocaleDateString('es-AR'); } catch (e) { return d; }

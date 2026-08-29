@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import api from '../api/client.js';
-import { Card, Badge, Button, Modal, Field, inputCls, Loading, EmptyState, fmtUSD } from '../components/UI.jsx';
+import { Card, Badge, Button, Modal, Field, inputCls, Loading, EmptyState, fmtPrecio } from '../components/UI.jsx';
 import { Plus, Pencil, Trash2, RotateCcw, Image as ImageIcon } from 'lucide-react';
 
 export default function Products() {
@@ -109,13 +109,17 @@ export default function Products() {
                       <td className="py-1.5 px-2 pl-0">
                         <div className="flex items-center gap-2">
                           {p.logo_data_url ? (
-                            <img src={p.logo_data_url} alt="" className="h-5 w-5 object-contain rounded flex-shrink-0" />
+                            // Sin ancho fijo: un logo apaisado (lo más común) se aplasta a una
+                            // franja diminuta si se lo encierra en una caja cuadrada chica. Se
+                            // fija sólo el alto (a la altura del texto) y se deja un ancho máximo
+                            // generoso para que se note, igual que el logo de proveedor arriba.
+                            <img src={p.logo_data_url} alt="" className="h-6 max-w-[72px] object-contain rounded flex-shrink-0" />
                           ) : null}
                           <span>{p.nombre}</span>
                         </div>
                       </td>
                       <td className="py-1.5 px-2 text-gray-500">{p.categoria || '—'}</td>
-                      <td className="py-1.5 px-2 text-right">{fmtUSD(p.precio_unitario)} <span className="text-gray-400">{p.moneda}</span></td>
+                      <td className="py-1.5 px-2 text-right">{fmtPrecio(p.precio_unitario)} <span className="text-gray-400">{p.moneda}</span></td>
                       <td className="py-1.5 px-2 text-gray-500">{p.unidad}</td>
                       <td className="py-1.5 px-2"><Badge text={p.activo ? 'Activo' : 'Inactivo'} /></td>
                       <td className="py-1.5 px-2 text-right whitespace-nowrap">
