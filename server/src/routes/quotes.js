@@ -23,17 +23,44 @@ function parseItemHeaders(raw) {
   try { return { ...DEFAULT_ITEM_HEADERS, ...JSON.parse(raw) }; } catch { return DEFAULT_ITEM_HEADERS; }
 }
 
+// La cantidad es opcional: una línea sin cantidad cargada (vacía/null) no tiene
+// importe (queda en blanco, no en 0) y no participa del total ni del total
+// financiado — sirve para dejar anotado un producto sin comprometer un monto.
+function cantidadVacia(cantidad) {
+  return cantidad === '' || cantidad === null || cantidad === undefined;
+}
+
 function computeTotals(items, descuentoGeneral = 0) {
   let subtotal = 0;
   let totalFinanciado = 0;
   const computed = (items || []).slice(0, 5).map(it => {
-    const importe = Number(it.cantidad) * Number(it.precio_unitario) * (1 - (Number(it.descuento) || 0) / 100);
+    if (cantidadVacia(it.cantidad)) {
+      return { ...it, cantidad: null, importe: null };
+    }
+    const cantidad = Number(it.cantidad);
+    const importe = cantidad * Number(it.precio_unitario) * (1 - (Number(it.descuento) || 0) / 100);
     subtotal += importe;
-    totalFinanciado += Number(it.cantidad) * (Number(it.financiado) || 0);
-    return { ...it, importe };
+    totalFinanciado += cantidad * (Number(it.financiado) || 0);
+    return { ...it, cantidad, importe };
   });
   const total = subtotal * (1 - (Number(descuentoGeneral) || 0) / 100);
   return { computed, subtotal, total, totalFinanciado };
+}
+
+// Convierte "Título: Detalle" por línea (formato del cuadro de notas) en filas
+// {label, detalle} para renderizar como tabla de dos columnas, tanto en la
+// pantalla de detalle (el cliente lo arma en Quotes.jsx con la misma lógica)
+// como en el PDF. Ignora líneas vacías o sin ":".
+function parseNotasTabla(text) {
+  if (!text) return [];
+  return text.split('\n').map(line => {
+    const idx = line.indexOf(':');
+    if (idx === -1) return null;
+    const label = line.slice(0, idx).trim();
+    const detalle = line.slice(idx + 1).trim();
+    if (!label || !detalle) return null;
+    return { label, detalle };
+  }).filter(Boolean);
 }
 
 router.get('/', async (req, res) => {
@@ -50,19 +77,20 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   const quote = await db.prepare(`SELECT q.*, c.razon_social as cliente_nombre FROM quotes q JOIN clients c ON c.id = q.client_id WHERE q.id = ?`).get(req.params.id);
   if (!quote) return res.status(404).json({ error: 'Cotización no encontrada' });
-  const items = await db.prepare('SELECT * FROM quote_items WHERE quote_id = ?').all(req.params.id);
+  const items = await db.prepare(`SELECT qi.*, p.logo_data_url as producto_logo FROM quote_items qi
+    LEFT JOIN products p ON p.id = qi.product_id WHERE qi.quote_id = ?`).all(req.params.id);
   res.json({ ...quote, item_headers: parseItemHeaders(quote.item_headers), items });
 });
 
 router.post('/', async (req, res) => {
-  const { client_id, fecha, fecha_vencimiento, moneda, descuento_general, items, probabilidad_cierre, responsable, observaciones, condiciones_comerciales, item_headers, usuario } = req.body;
+  const { client_id, fecha, fecha_vencimiento, moneda, descuento_general, items, probabilidad_cierre, responsable, observaciones, condiciones_comerciales, notas_tabla, item_headers, usuario } = req.body;
   const { computed, subtotal, total, totalFinanciado } = computeTotals(items || [], descuento_general);
   const numero = await genNumber('COT', 'quotes');
-  const id = (await db.prepare(`INSERT INTO quotes (numero, client_id, fecha, fecha_vencimiento, moneda, descuento_general, subtotal, total, total_financiado, probabilidad_cierre, estado, responsable, observaciones, condiciones_comerciales, item_headers)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+  const id = (await db.prepare(`INSERT INTO quotes (numero, client_id, fecha, fecha_vencimiento, moneda, descuento_general, subtotal, total, total_financiado, probabilidad_cierre, estado, responsable, observaciones, condiciones_comerciales, notas_tabla, item_headers)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
     numero, client_id, fecha || new Date().toISOString().slice(0, 10), fecha_vencimiento, moneda || 'USD',
     descuento_general || 0, subtotal, total, totalFinanciado, probabilidad_cierre || 50, 'Borrador', responsable, observaciones,
-    condiciones_comerciales || null, item_headers ? JSON.stringify(item_headers) : null
+    condiciones_comerciales || null, notas_tabla || null, item_headers ? JSON.stringify(item_headers) : null
   )).lastInsertRowid;
   const insItem = db.prepare('INSERT INTO quote_items (quote_id, product_id, descripcion, cantidad, precio_unitario, descuento, financiado, importe) VALUES (?,?,?,?,?,?,?,?)');
   for (const it of computed) await insItem.run(id, it.product_id || null, it.descripcion, it.cantidad, it.precio_unitario, it.descuento || 0, it.financiado || 0, it.importe);
@@ -77,10 +105,10 @@ router.put('/:id', async (req, res) => {
   const quote = await db.prepare('SELECT * FROM quotes WHERE id = ?').get(req.params.id);
   if (!quote) return res.status(404).json({ error: 'Cotización no encontrada' });
 
-  const { fecha, fecha_vencimiento, moneda, descuento_general, items, probabilidad_cierre, responsable, observaciones, condiciones_comerciales, item_headers, usuario } = req.body;
+  const { fecha, fecha_vencimiento, moneda, descuento_general, items, probabilidad_cierre, responsable, observaciones, condiciones_comerciales, notas_tabla, item_headers, usuario } = req.body;
   const { computed, subtotal, total, totalFinanciado } = computeTotals(items || [], descuento_general ?? quote.descuento_general);
 
-  await db.prepare(`UPDATE quotes SET fecha=?, fecha_vencimiento=?, moneda=?, descuento_general=?, subtotal=?, total=?, total_financiado=?, probabilidad_cierre=?, responsable=?, observaciones=?, condiciones_comerciales=?, item_headers=?, updated_at=datetime('now') WHERE id=?`)
+  await db.prepare(`UPDATE quotes SET fecha=?, fecha_vencimiento=?, moneda=?, descuento_general=?, subtotal=?, total=?, total_financiado=?, probabilidad_cierre=?, responsable=?, observaciones=?, condiciones_comerciales=?, notas_tabla=?, item_headers=?, updated_at=datetime('now') WHERE id=?`)
     .run(
       fecha || quote.fecha,
       fecha_vencimiento ?? quote.fecha_vencimiento,
@@ -91,6 +119,7 @@ router.put('/:id', async (req, res) => {
       responsable ?? quote.responsable,
       observaciones ?? quote.observaciones,
       condiciones_comerciales ?? quote.condiciones_comerciales,
+      notas_tabla ?? quote.notas_tabla,
       item_headers ? JSON.stringify(item_headers) : quote.item_headers,
       req.params.id
     );
@@ -120,8 +149,11 @@ router.post('/:id/convert-to-sale', async (req, res) => {
   const numero = await genNumber('VTA', 'sales');
   const saleId = (await db.prepare(`INSERT INTO sales (numero, client_id, quote_id, fecha, moneda, total, vendedor, observaciones) VALUES (?,?,?,date('now'),?,?,?,?)`)
     .run(numero, quote.client_id, quote.id, quote.moneda, quote.total, vendedor || quote.responsable, `Generada desde cotización ${quote.numero}`)).lastInsertRowid;
+  // Una línea de la cotización sin cantidad cargada (opcional, no participa del
+  // total) pasa a la venta con cantidad/importe en 0 en vez de NULL, para que el
+  // módulo de Ventas (que asume cantidad numérica) siga funcionando igual que antes.
   const insItem = db.prepare('INSERT INTO sale_items (sale_id, product_id, descripcion, cantidad, precio_unitario, importe) VALUES (?,?,?,?,?,?)');
-  for (const it of items) await insItem.run(saleId, it.product_id, it.descripcion, it.cantidad, it.precio_unitario, it.importe);
+  for (const it of items) await insItem.run(saleId, it.product_id, it.descripcion, it.cantidad ?? 0, it.precio_unitario, it.importe ?? 0);
   await db.prepare(`UPDATE quotes SET estado='Aceptada', updated_at=datetime('now') WHERE id=?`).run(req.params.id);
   await logActivity(quote.client_id, 'Venta', `Venta ${numero} generada desde cotización ${quote.numero} por ${quote.moneda} ${quote.total.toFixed(2)}.`, usuario, 'sales', saleId);
   const existing = await db.prepare(`SELECT id FROM milestones WHERE client_id = ? AND tipo = 'Primera venta'`).get(quote.client_id);
@@ -139,6 +171,16 @@ const GREEN = '#1e5f3c';
 const GREEN_LIGHT = '#5c8f74';
 const fmtMoney = (n, moneda = 'USD') => `${moneda} ${Number(n || 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
+// Decodifica un logo guardado como data URL (base64) a un Buffer que pdfkit
+// pueda dibujar con doc.image(); devuelve null si no hay logo o el formato no
+// es el esperado (así nunca corta la generación del PDF).
+function dataUrlToBuffer(dataUrl) {
+  if (!dataUrl || typeof dataUrl !== 'string') return null;
+  const match = dataUrl.match(/^data:image\/[a-zA-Z0-9.+-]+;base64,(.+)$/);
+  if (!match) return null;
+  try { return Buffer.from(match[1], 'base64'); } catch { return null; }
+}
+
 // Genera un PDF de la cotización con un formato inspirado en las cotizaciones
 // comerciales de Microvidas (encabezado en verde, tabla de productos, total,
 // condiciones comerciales y pie con la leyenda de validez) — sin los campos de
@@ -146,8 +188,10 @@ const fmtMoney = (n, moneda = 'USD') => `${moneda} ${Number(n || 0).toLocaleStri
 router.get('/:id/pdf', async (req, res) => {
   const quote = await db.prepare(`SELECT q.*, c.razon_social as cliente_nombre FROM quotes q JOIN clients c ON c.id = q.client_id WHERE q.id = ?`).get(req.params.id);
   if (!quote) return res.status(404).json({ error: 'Cotización no encontrada' });
-  const items = await db.prepare('SELECT * FROM quote_items WHERE quote_id = ?').all(req.params.id);
+  const items = await db.prepare(`SELECT qi.*, p.logo_data_url as producto_logo FROM quote_items qi
+    LEFT JOIN products p ON p.id = qi.product_id WHERE qi.quote_id = ?`).all(req.params.id);
   const headers = parseItemHeaders(quote.item_headers);
+  const notasTablaRows = parseNotasTabla(quote.notas_tabla);
   const moneda = quote.moneda || 'USD';
 
   const doc = new PDFDocument({ margin: 30, size: 'A4' });
@@ -216,18 +260,30 @@ router.get('/:id/pdf', async (req, res) => {
   for (const it of items) {
     if (y > doc.page.height - 160) { doc.addPage(); y = 40; y = drawHeaderRow(y); }
     const rowH = 22;
+    const sinCantidad = it.cantidad === null || it.cantidad === undefined;
     const precioDesc = Number(it.precio_unitario) * (1 - (Number(it.descuento) || 0) / 100);
     const vals = [
       it.descripcion || '',
-      Number(it.cantidad).toLocaleString('es-AR'),
+      sinCantidad ? '—' : Number(it.cantidad).toLocaleString('es-AR'),
       fmtMoney(it.precio_unitario, moneda),
       fmtMoney(precioDesc, moneda),
       it.financiado ? fmtMoney(it.financiado, moneda) : '—',
-      fmtMoney(it.importe, moneda),
+      sinCantidad ? '—' : fmtMoney(it.importe, moneda),
     ];
     let x = left;
     doc.fillColor('#1f2937');
+    const logoBuf = dataUrlToBuffer(it.producto_logo);
     vals.forEach((v, i) => {
+      // Columna "producto": si el producto tiene logo cargado, se dibuja un
+      // ícono chico antes del nombre y el texto se corre para no superponerse.
+      if (i === 0 && logoBuf) {
+        try {
+          doc.image(logoBuf, x + 4, y + 4, { width: 14, height: 14, fit: [14, 14] });
+          doc.text(String(v), x + 22, y + 6, { width: cols[i].w - 26, align: cols[i].align });
+          x += cols[i].w;
+          return;
+        } catch { /* si el logo no se puede decodificar, se dibuja el texto normal debajo */ }
+      }
       doc.text(String(v), x + 4, y + 6, { width: cols[i].w - 8, align: cols[i].align });
       x += cols[i].w;
     });
@@ -262,6 +318,26 @@ router.get('/:id/pdf', async (req, res) => {
   if (quote.observaciones) {
     doc.fontSize(8.5).fillColor('#6b7280').font('Helvetica-Oblique').text(quote.observaciones, left, y, { width: tableWidth });
     y = doc.y + 10;
+  }
+
+  // Cuadro de notas (precio en USD+IVA, tipo de cambio, tarjetas, etc.) — tabla
+  // de dos columnas debajo de condiciones comerciales, editable por cotización.
+  if (notasTablaRows.length) {
+    const labelW = 140;
+    const detailW = tableWidth - labelW;
+    y += 4;
+    for (const row of notasTablaRows) {
+      doc.font('Helvetica').fontSize(8.5);
+      const detHeight = doc.heightOfString(row.detalle, { width: detailW - 12 });
+      const rowH = Math.max(20, detHeight + 10);
+      if (y + rowH > doc.page.height - 90) { doc.addPage(); y = 40; }
+      doc.rect(left, y, tableWidth, rowH).strokeColor('#d1d5db').lineWidth(0.5).stroke();
+      doc.moveTo(left + labelW, y).lineTo(left + labelW, y + rowH).strokeColor('#d1d5db').stroke();
+      doc.font('Helvetica-Bold').fillColor('#111827').fontSize(8.5).text(row.label, left + 6, y + 5, { width: labelW - 12 });
+      doc.font('Helvetica').fillColor('#374151').fontSize(8.5).text(row.detalle, left + labelW + 6, y + 5, { width: detailW - 12 });
+      y += rowH;
+    }
+    y += 10;
   }
 
   // Pie

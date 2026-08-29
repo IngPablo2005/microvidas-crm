@@ -137,6 +137,7 @@ CREATE TABLE IF NOT EXISTS products (
   precio_unitario REAL DEFAULT 0,
   moneda TEXT DEFAULT 'USD',
   unidad TEXT DEFAULT 'unidad',
+  logo_data_url TEXT, -- logo/imagen propia del producto (opcional), guardado como data URL (base64), igual que el logo de proveedor
   activo INTEGER DEFAULT 1,
   proveedor_id INTEGER REFERENCES proveedores(id)
 );
@@ -171,6 +172,7 @@ CREATE TABLE IF NOT EXISTS quotes (
   responsable TEXT,
   observaciones TEXT,
   condiciones_comerciales TEXT, -- texto libre, precargado desde settings.condiciones_comerciales_default
+  notas_tabla TEXT, -- cuadro de notas (precio en USD+IVA, tipo de cambio, tarjetas, etc.), precargado desde settings.notas_tabla_default; una fila por línea con formato "Título: Detalle"
   item_headers TEXT, -- JSON con los títulos de columna de la tabla de productos (editable por cotización)
   total_financiado REAL DEFAULT 0,
   created_at TEXT DEFAULT (datetime('now')),
@@ -365,12 +367,23 @@ CREATE INDEX IF NOT EXISTS idx_client_crops_client ON client_crops(client_id);
   if (!quoteCols.includes('condiciones_comerciales')) await exec('ALTER TABLE quotes ADD COLUMN condiciones_comerciales TEXT');
   if (!quoteCols.includes('item_headers')) await exec('ALTER TABLE quotes ADD COLUMN item_headers TEXT');
   if (!quoteCols.includes('total_financiado')) await exec('ALTER TABLE quotes ADD COLUMN total_financiado REAL DEFAULT 0');
+  if (!quoteCols.includes('notas_tabla')) await exec('ALTER TABLE quotes ADD COLUMN notas_tabla TEXT');
 
   const quoteItemCols = (await db.prepare("PRAGMA table_info(quote_items)").all()).map(c => c.name);
   if (!quoteItemCols.includes('financiado')) await exec('ALTER TABLE quote_items ADD COLUMN financiado REAL DEFAULT 0');
 
   const productCols = (await db.prepare("PRAGMA table_info(products)").all()).map(c => c.name);
   if (!productCols.includes('proveedor_id')) await exec('ALTER TABLE products ADD COLUMN proveedor_id INTEGER REFERENCES proveedores(id)');
+  if (!productCols.includes('logo_data_url')) await exec('ALTER TABLE products ADD COLUMN logo_data_url TEXT');
+
+  // Valor por defecto del cuadro de notas de cotización (precio en USD+IVA, tipo de
+  // cambio, tarjetas) — sólo se inserta si la clave no existe todavía, para no
+  // pisar un valor que Pablo ya haya editado desde Configuración → Cotizaciones.
+  await db.prepare(`INSERT OR IGNORE INTO settings (key, value) VALUES ('notas_tabla_default', ?)`).run(
+    'Precio en Dólares + IVA: Sujeto a modificaciones sin previo aviso.\n' +
+    'Tipo de cambio: Se tomará el tipo de cambio dólar Divisa s/BNA. https://www.bna.com.ar.\n' +
+    'Tarjetas: Consultar por financiación con tarjetas bancarias: Galicia Rural, Macro Agro y Agro Nación.'
+  );
 }
 
 export default db;

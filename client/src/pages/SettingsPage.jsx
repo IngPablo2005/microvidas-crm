@@ -15,7 +15,7 @@ const EXPORT_ENTITIES = [
 export default function SettingsPage() {
   const { user } = useAuth();
   const [users, setUsers] = useState([]);
-  const [settings, setSettings] = useState({ objetivo_mensual_usd: '', dias_sin_contacto_alerta: '', condiciones_comerciales_default: '' });
+  const [settings, setSettings] = useState({ objetivo_mensual_usd: '', dias_sin_contacto_alerta: '', condiciones_comerciales_default: '', notas_tabla_default: '' });
   const [loading, setLoading] = useState(true);
   const [showNewUser, setShowNewUser] = useState(false);
   const canManageUsers = user?.role === 'Administrador' || user?.role === 'Gerente';
@@ -27,6 +27,7 @@ export default function SettingsPage() {
       objetivo_mensual_usd: s.data.objetivo_mensual_usd || '',
       dias_sin_contacto_alerta: s.data.dias_sin_contacto_alerta || '',
       condiciones_comerciales_default: s.data.condiciones_comerciales_default || '',
+      notas_tabla_default: s.data.notas_tabla_default || '',
     });
     if (canManageUsers) {
       const u = await api.get('/auth/users');
@@ -75,13 +76,24 @@ export default function SettingsPage() {
           Texto de "Condiciones comerciales" que se precarga en cada cotización nueva (forma de pago, plazos de entrega, validez, etc.).
           Se puede editar o reemplazar en cada cotización sin afectar esta plantilla.
         </p>
-        <form onSubmit={saveSettings}>
+        <form onSubmit={saveSettings} className="space-y-4">
           <Field label="Condiciones comerciales por defecto">
             <textarea
               className={inputCls} rows={4}
               value={settings.condiciones_comerciales_default}
               onChange={e => setSettings(s => ({ ...s, condiciones_comerciales_default: e.target.value }))}
               placeholder="Ej: Pago 50% al confirmar el pedido y 50% contra entrega. Entrega en 7 días hábiles. Precios sujetos a disponibilidad de stock."
+            />
+          </Field>
+          <Field label="Notas (cuadro debajo de condiciones comerciales) por defecto">
+            <p className="text-xs text-gray-500 mb-1.5">
+              Se muestra como una tabla de dos columnas debajo de "Condiciones comerciales", tanto en pantalla como en el PDF. Una línea por fila, con formato <span className="font-mono">Título: Detalle</span>.
+            </p>
+            <textarea
+              className={inputCls} rows={3}
+              value={settings.notas_tabla_default}
+              onChange={e => setSettings(s => ({ ...s, notas_tabla_default: e.target.value }))}
+              placeholder={'Precio en Dólares + IVA: Sujeto a modificaciones sin previo aviso.\nTipo de cambio: Se tomará el tipo de cambio dólar Divisa s/BNA. https://www.bna.com.ar.'}
             />
           </Field>
           <Button type="submit">Guardar configuración</Button>

@@ -106,7 +106,14 @@ export default function Products() {
                 <tbody>
                   {g.items.map(p => (
                     <tr key={p.id} className={`border-t border-gray-50 ${!p.activo ? 'opacity-50' : ''}`}>
-                      <td className="py-1.5 px-2 pl-0">{p.nombre}</td>
+                      <td className="py-1.5 px-2 pl-0">
+                        <div className="flex items-center gap-2">
+                          {p.logo_data_url ? (
+                            <img src={p.logo_data_url} alt="" className="h-5 w-5 object-contain rounded flex-shrink-0" />
+                          ) : null}
+                          <span>{p.nombre}</span>
+                        </div>
+                      </td>
                       <td className="py-1.5 px-2 text-gray-500">{p.categoria || '—'}</td>
                       <td className="py-1.5 px-2 text-right">{fmtUSD(p.precio_unitario)} <span className="text-gray-400">{p.moneda}</span></td>
                       <td className="py-1.5 px-2 text-gray-500">{p.unidad}</td>
@@ -157,10 +164,20 @@ function ProductFormModal({ proveedores, editingProduct, onClose, onSaved }) {
     proveedor_id: editingProduct?.proveedor_id || '',
     activo: editingProduct?.activo ?? 1,
   });
+  const [logo, setLogo] = useState(editingProduct?.logo_data_url || null);
+  const logoFileRef = useRef(null);
+
+  function onLogoFile(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setLogo(reader.result);
+    reader.readAsDataURL(file);
+  }
 
   async function save(e) {
     e.preventDefault();
-    const payload = { ...form, proveedor_id: form.proveedor_id || null };
+    const payload = { ...form, proveedor_id: form.proveedor_id || null, logo_data_url: logo };
     if (isEditing) await api.put(`/products/${editingProduct.id}`, payload);
     else await api.post('/products', payload);
     onSaved();
@@ -186,6 +203,18 @@ function ProductFormModal({ proveedores, editingProduct, onClose, onSaved }) {
             <option value="">Sin proveedor</option>
             {proveedores.map(pr => <option key={pr.id} value={pr.id}>{pr.nombre}</option>)}
           </select>
+        </Field>
+        <Field label="Logo del producto (opcional)">
+          <div className="flex items-center gap-3">
+            {logo ? (
+              <img src={logo} alt="" className="h-10 max-w-[140px] object-contain border border-gray-100 rounded" />
+            ) : (
+              <div className="h-10 w-10 rounded bg-gray-100 flex items-center justify-center text-gray-300"><ImageIcon size={16} /></div>
+            )}
+            <Button type="button" variant="secondary" onClick={() => logoFileRef.current?.click()}>{logo ? 'Cambiar' : 'Subir logo'}</Button>
+            {logo && <button type="button" onClick={() => setLogo(null)} className="text-xs text-red-500 hover:underline">Quitar</button>}
+            <input ref={logoFileRef} type="file" accept="image/*" className="hidden" onChange={onLogoFile} />
+          </div>
         </Field>
         <div className="flex justify-end gap-2 mt-3">
           <Button variant="secondary" type="button" onClick={onClose}>Cancelar</Button>

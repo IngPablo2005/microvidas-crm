@@ -16,16 +16,19 @@ router.get('/', async (req, res) => {
 });
 
 router.post('/', async (req, res) => {
-  const { nombre, categoria, precio_unitario, moneda, unidad, proveedor_id } = req.body;
-  const id = (await db.prepare('INSERT INTO products (nombre, categoria, precio_unitario, moneda, unidad, proveedor_id) VALUES (?,?,?,?,?,?)')
-    .run(nombre, categoria, precio_unitario || 0, moneda || 'USD', unidad || 'unidad', proveedor_id || null)).lastInsertRowid;
+  const { nombre, categoria, precio_unitario, moneda, unidad, proveedor_id, logo_data_url } = req.body;
+  const id = (await db.prepare('INSERT INTO products (nombre, categoria, precio_unitario, moneda, unidad, proveedor_id, logo_data_url) VALUES (?,?,?,?,?,?,?)')
+    .run(nombre, categoria, precio_unitario || 0, moneda || 'USD', unidad || 'unidad', proveedor_id || null, logo_data_url || null)).lastInsertRowid;
   res.status(201).json({ id });
 });
 
 router.put('/:id', async (req, res) => {
-  const { nombre, categoria, precio_unitario, moneda, unidad, activo, proveedor_id } = req.body;
-  await db.prepare('UPDATE products SET nombre=?, categoria=?, precio_unitario=?, moneda=?, unidad=?, activo=?, proveedor_id=? WHERE id=?')
-    .run(nombre, categoria, precio_unitario, moneda, unidad, activo === undefined ? 1 : (activo ? 1 : 0), proveedor_id || null, req.params.id);
+  const prod = await db.prepare('SELECT * FROM products WHERE id = ?').get(req.params.id);
+  if (!prod) return res.status(404).json({ error: 'Producto no encontrado' });
+  const { nombre, categoria, precio_unitario, moneda, unidad, activo, proveedor_id, logo_data_url } = req.body;
+  await db.prepare('UPDATE products SET nombre=?, categoria=?, precio_unitario=?, moneda=?, unidad=?, activo=?, proveedor_id=?, logo_data_url=? WHERE id=?')
+    .run(nombre, categoria, precio_unitario, moneda, unidad, activo === undefined ? 1 : (activo ? 1 : 0), proveedor_id || null,
+      logo_data_url === undefined ? prod.logo_data_url : logo_data_url, req.params.id);
   res.json({ ok: true });
 });
 
