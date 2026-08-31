@@ -10,6 +10,15 @@ export function todayStr() {
   return new Date().toISOString().slice(0, 10);
 }
 
+// Quita acentos y diferencias de mayúsculas/espacios para poder agrupar texto
+// cargado a mano (ej. nombres de producto escritos "a ojo" en una venta) sin que
+// "Fosfi Q" y "fosfi q" o "Astarté N20" y "Astarte N20" cuenten como cosas
+// distintas. Mismo criterio que se usa en el buscador de clientes del frontend
+// (ClientPicker.jsx), replicado acá para los rankings de productos.
+export function normalizeText(str) {
+  return (str || '').toString().normalize('NFD').replace(/\p{Diacritic}/gu, '').trim().toLowerCase();
+}
+
 export async function paginate(query, params, page = 1, pageSize = 50) {
   const offset = (page - 1) * pageSize;
   return db.prepare(`${query} LIMIT ? OFFSET ?`).all(...params, pageSize, offset);
