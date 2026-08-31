@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import api from '../api/client.js';
-import { Card, Badge, Button, Modal, Field, inputCls, Loading, EmptyState, fmtUSD, fmtDate } from '../components/UI.jsx';
-import { Plus, Download, Pencil, FileText } from 'lucide-react';
+import { Card, Badge, Button, Modal, Field, inputCls, Loading, EmptyState, fmtPrecio, fmtDate } from '../components/UI.jsx';
+import { Plus, Download, Pencil, FileText, Trash2 } from 'lucide-react';
 
 const LOGO_SRC = '/branding/microvidas-logo.png';
 
@@ -78,6 +78,13 @@ export default function Quotes() {
     setDetail(null);
   }
 
+  async function deleteQuote(id, numero) {
+    if (!window.confirm(`¿Eliminar la cotización ${numero}? Esta acción no se puede deshacer.`)) return;
+    await api.delete(`/quotes/${id}`);
+    setDetail(null);
+    load();
+  }
+
   async function openDetail(id) {
     const { data } = await api.get(`/quotes/${id}`);
     setDetail(data);
@@ -127,7 +134,7 @@ export default function Quotes() {
                   <td className="px-4 py-2.5 text-gray-600">{q.cliente_nombre}</td>
                   <td className="px-4 py-2.5 text-gray-500">{fmtDate(q.fecha)}</td>
                   <td className="px-4 py-2.5 text-gray-500">{fmtDate(q.fecha_vencimiento)}</td>
-                  <td className="px-4 py-2.5 text-right font-medium">{fmtUSD(q.total)}</td>
+                  <td className="px-4 py-2.5 text-right font-medium">{fmtPrecio(q.total)}</td>
                   <td className="px-4 py-2.5"><Badge text={q.estado} /></td>
                 </tr>
               ))}
@@ -182,17 +189,17 @@ export default function Quotes() {
                       )}
                     </td>
                     <td className="py-1.5 text-right">{cantidadVacia(it.cantidad) ? '—' : it.cantidad}</td>
-                    <td className="py-1.5 text-right">{fmtUSD(it.precio_unitario)}{it.descuento ? ` (-${it.descuento}%)` : ''}</td>
-                    <td className="py-1.5 text-right">{it.financiado ? fmtUSD(it.financiado) : '—'}</td>
-                    <td className="py-1.5 text-right">{cantidadVacia(it.cantidad) ? '—' : fmtUSD(it.importe)}</td>
+                    <td className="py-1.5 text-right">{fmtPrecio(it.precio_unitario)}{it.descuento ? ` (-${it.descuento}%)` : ''}</td>
+                    <td className="py-1.5 text-right">{it.financiado ? fmtPrecio(it.financiado) : '—'}</td>
+                    <td className="py-1.5 text-right">{cantidadVacia(it.cantidad) ? '—' : fmtPrecio(it.importe)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
             {detail.items.some(it => !cantidadVacia(it.cantidad)) && (
-              <div className="text-right font-semibold">Total: {fmtUSD(detail.total)}</div>
+              <div className="text-right font-semibold">Total: {fmtPrecio(detail.total)}</div>
             )}
-            {detail.total_financiado > 0 && <div className="text-right text-sm text-gray-500">Total financiado: {fmtUSD(detail.total_financiado)}</div>}
+            {detail.total_financiado > 0 && <div className="text-right text-sm text-gray-500">Total financiado: {fmtPrecio(detail.total_financiado)}</div>}
             {detail.condiciones_comerciales && (
               <div className="text-sm bg-gray-50 rounded-md p-3">
                 <div className="text-xs font-semibold text-gray-600 mb-1">Condiciones comerciales</div>
@@ -221,6 +228,7 @@ export default function Quotes() {
                 <Button key={s} variant="secondary" onClick={() => changeStatus(detail.id, s)}>Marcar {s}</Button>
               ))}
               <Button onClick={() => convertToSale(detail.id)}>Convertir en venta</Button>
+              <Button variant="danger" onClick={() => deleteQuote(detail.id, detail.numero)}><Trash2 size={13} className="inline mr-1" /> Eliminar</Button>
             </div>
           </div>
         </Modal>
@@ -362,9 +370,9 @@ function QuoteFormModal({ clients, products, defaultClientId, defaultCondiciones
                       <td className="px-2 py-1 align-top"><input type="number" step="any" placeholder="Opcional" className={cellInputCls + ' text-right'} value={it.cantidad} onChange={e => updateItem(i, { cantidad: e.target.value })} /></td>
                       <td className="px-2 py-1 align-top"><input type="number" step="any" className={cellInputCls + ' text-right'} value={it.precio_unitario} onChange={e => updateItem(i, { precio_unitario: e.target.value })} /></td>
                       <td className="px-2 py-1 align-top"><input type="number" step="any" className={cellInputCls + ' text-right'} value={it.descuento} onChange={e => updateItem(i, { descuento: e.target.value })} /></td>
-                      <td className="px-2 py-1 align-top text-right text-gray-500">{fmtUSD(precioDesc)}</td>
+                      <td className="px-2 py-1 align-top text-right text-gray-500">{fmtPrecio(precioDesc)}</td>
                       <td className="px-2 py-1 align-top"><input type="number" step="any" className={cellInputCls + ' text-right'} value={it.financiado} onChange={e => updateItem(i, { financiado: e.target.value })} /></td>
-                      <td className="px-2 py-1 align-top text-right font-medium text-gray-700">{sinCantidad ? '—' : fmtUSD(importe)}</td>
+                      <td className="px-2 py-1 align-top text-right font-medium text-gray-700">{sinCantidad ? '—' : fmtPrecio(importe)}</td>
                       <td className="px-2 py-1 align-top text-center">
                         <button type="button" onClick={() => removeItem(i)} className="text-red-400 hover:text-red-600 text-xs">✕</button>
                       </td>
@@ -396,8 +404,8 @@ function QuoteFormModal({ clients, products, defaultClientId, defaultCondiciones
 
         {(anyCantidad || totalFinanciado > 0) && (
           <div className="text-right mt-2">
-            {anyCantidad && <div className="font-semibold text-lg">Total: {fmtUSD(total)}</div>}
-            {totalFinanciado > 0 && <div className="text-sm text-gray-500">Total financiado: {fmtUSD(totalFinanciado)}</div>}
+            {anyCantidad && <div className="font-semibold text-lg">Total: {fmtPrecio(total)}</div>}
+            {totalFinanciado > 0 && <div className="text-sm text-gray-500">Total financiado: {fmtPrecio(totalFinanciado)}</div>}
           </div>
         )}
 
