@@ -271,6 +271,12 @@ function QuoteFormModal({ clients, products, defaultClientId, defaultCondiciones
       ? editingQuote.items.map(it => ({ product_id: it.product_id || '', descripcion: it.descripcion, cantidad: it.cantidad ?? '', precio_unitario: it.precio_unitario, descuento: it.descuento || 0, financiado: it.financiado || 0 }))
       : [emptyItem()]
   );
+  // Antes, si la creación fallaba en el servidor (ej. el bug del número de
+  // cotización duplicado, ya corregido), no había ningún aviso: el botón parecía
+  // no hacer nada. Ahora se muestra el error y se deshabilita el botón mientras
+  // se guarda, para evitar además el doble clic accidental.
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
   function updateItem(i, patch) {
     setItems(prev => prev.map((it, idx) => idx === i ? { ...it, ...patch } : it));
@@ -293,13 +299,21 @@ function QuoteFormModal({ clients, products, defaultClientId, defaultCondiciones
   async function save(e) {
     e.preventDefault();
     if (!clientId) return alert('Seleccioná un cliente');
+    if (saving) return; // evita doble envío si se hace doble clic
+    setSaving(true);
+    setSaveError('');
     const payload = { fecha_vencimiento: fechaVencimiento, items, responsable, observaciones, condiciones_comerciales: condicionesComerciales, notas_tabla: notasTabla, item_headers: headers, usuario: 'Usuario' };
-    if (isEditing) {
-      await api.put(`/quotes/${editingQuote.id}`, payload);
-    } else {
-      await api.post('/quotes', { client_id: clientId, ...payload });
+    try {
+      if (isEditing) {
+        await api.put(`/quotes/${editingQuote.id}`, payload);
+      } else {
+        await api.post('/quotes', { client_id: clientId, ...payload });
+      }
+      onSaved();
+    } catch (err) {
+      setSaveError('No se pudo guardar la cotización. Probá de nuevo en unos segundos; si el problema sigue, avisale a soporte.');
+      setSaving(false);
     }
-    onSaved();
   }
 
   const headerInputCls = 'w-full bg-transparent text-[11px] font-semibold uppercase text-white placeholder-green-100 focus:outline-none focus:bg-green-800/40 rounded px-1 py-0.5';
@@ -409,9 +423,11 @@ function QuoteFormModal({ clients, products, defaultClientId, defaultCondiciones
           </div>
         )}
 
+        {saveError && <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2 mt-2">{saveError}</div>}
+
         <div className="flex justify-end gap-2 mt-3">
-          <Button variant="secondary" type="button" onClick={onClose}>Cancelar</Button>
-          <Button type="submit">{isEditing ? 'Guardar cambios' : 'Crear cotización'}</Button>
+          <Button variant="secondary" type="button" onClick={onClose} disabled={saving}>Cancelar</Button>
+          <Button type="submit" disabled={saving}>{saving ? 'Guardando...' : (isEditing ? 'Guardar cambios' : 'Crear cotización')}</Button>
         </div>
       </form>
     </Modal>
