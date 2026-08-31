@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import api from '../api/client.js';
 import { Card, Badge, Button, Modal, Field, inputCls, Loading, EmptyState, fmtPrecio, fmtDate } from '../components/UI.jsx';
+import ClientPicker from '../components/ClientPicker.jsx';
 import { Plus, Download, Pencil, FileText, Trash2 } from 'lucide-react';
 
 const LOGO_SRC = '/branding/microvidas-logo.png';
@@ -48,16 +49,22 @@ export default function Quotes() {
   const [detail, setDetail] = useState(null);
   const [editing, setEditing] = useState(false);
 
+  // Se usa tanto en el load() general como cada vez que se abre el buscador de
+  // clientes del formulario (ver ClientPicker onOpen más abajo), así un cliente
+  // recién cargado en otra pestaña/pantalla aparece sin recargar toda la página.
+  function refreshClients() {
+    return api.get('/clients', { params: { pageSize: 200 } }).then(({ data }) => setClients(data.rows));
+  }
+
   async function load() {
     setLoading(true);
-    const [q, c, p, s] = await Promise.all([
+    const [q, , p, s] = await Promise.all([
       api.get('/quotes', { params: estado ? { estado } : {} }),
-      api.get('/clients', { params: { pageSize: 200 } }),
+      refreshClients(),
       api.get('/products'),
       api.get('/dashboard/settings'),
     ]);
     setRows(q.data);
-    setClients(c.data.rows);
     setProducts(p.data);
     setDefaultCondiciones(s.data.condiciones_comerciales_default || '');
     setDefaultNotasTabla(s.data.notas_tabla_default || '');
@@ -146,6 +153,7 @@ export default function Quotes() {
       {showNew && (
         <QuoteFormModal
           clients={clients}
+          onOpenClientPicker={refreshClients}
           products={products}
           defaultClientId={params.get('client_id')}
           defaultCondiciones={defaultCondiciones}
@@ -253,7 +261,7 @@ export default function Quotes() {
 // se calcula/muestra si se anota una cantidad.
 function emptyItem() { return { product_id: '', descripcion: '', cantidad: '', precio_unitario: 0, descuento: 0, financiado: 0 }; }
 
-function QuoteFormModal({ clients, products, defaultClientId, defaultCondiciones, defaultNotasTabla, editingQuote, onClose, onSaved }) {
+function QuoteFormModal({ clients, onOpenClientPicker, products, defaultClientId, defaultCondiciones, defaultNotasTabla, editingQuote, onClose, onSaved }) {
   const isEditing = !!editingQuote;
   const [clientId, setClientId] = useState(editingQuote?.client_id || defaultClientId || '');
   const [fechaVencimiento, setFechaVencimiento] = useState(editingQuote?.fecha_vencimiento?.slice(0, 10) || '');
@@ -333,10 +341,7 @@ function QuoteFormModal({ clients, products, defaultClientId, defaultCondiciones
             {isEditing ? (
               <input disabled className={inputCls + ' bg-gray-50 text-gray-500'} value={clienteActual?.razon_social || editingQuote.cliente_nombre || ''} />
             ) : (
-              <select required className={inputCls} value={clientId} onChange={e => setClientId(e.target.value)}>
-                <option value="">Seleccionar...</option>
-                {clients.map(c => <option key={c.id} value={c.id}>{c.razon_social}</option>)}
-              </select>
+              <ClientPicker clients={clients} value={clientId} onChange={setClientId} onOpen={onOpenClientPicker} />
             )}
           </Field>
           <Field label="Vencimiento"><input type="date" className={inputCls} value={fechaVencimiento} onChange={e => setFechaVencimiento(e.target.value)} /></Field>

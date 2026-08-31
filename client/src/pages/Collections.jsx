@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api/client.js';
 import { Card, KpiCard, Badge, Button, Modal, Field, inputCls, Loading, EmptyState, fmtUSD, fmtDate } from '../components/UI.jsx';
+import ClientPicker from '../components/ClientPicker.jsx';
 import { STATUS } from '../colors.js';
 import { Plus, Download, Wallet } from 'lucide-react';
 
@@ -18,20 +19,26 @@ export default function Collections() {
   const [showCommit, setShowCommit] = useState(false);
   const [tab, setTab] = useState('cobranzas');
 
+  // Se usa tanto en el load() general como cada vez que se abre el buscador de
+  // clientes de los formularios, así un cliente recién cargado en otra pestaña
+  // aparece sin recargar toda la página.
+  function refreshClients() {
+    return api.get('/clients', { params: { pageSize: 200 } }).then(({ data }) => setClients(data.rows));
+  }
+
   async function load() {
     setLoading(true);
-    const [d, c, cm, inv, cl] = await Promise.all([
+    const [d, c, cm, inv] = await Promise.all([
       api.get('/dashboard'),
       api.get('/collections'),
       api.get('/collections/commitments'),
       api.get('/collections/invoices'),
-      api.get('/clients', { params: { pageSize: 200 } }),
+      refreshClients(),
     ]);
     setDash(d.data);
     setRows(c.data);
     setCommitments(cm.data);
     setInvoices(inv.data);
-    setClients(cl.data.rows);
     setLoading(false);
   }
   useEffect(() => { load(); }, []);
@@ -149,17 +156,20 @@ export default function Collections() {
         </Card>
       )}
 
-      <CollectionCreateModal open={showNew} onClose={() => setShowNew(false)} clients={clients} onSaved={() => { setShowNew(false); load(); }} />
-      <CommitmentModal open={showCommit} onClose={() => setShowCommit(false)} clients={clients} onSaved={() => { setShowCommit(false); load(); }} />
+      <CollectionCreateModal open={showNew} onClose={() => setShowNew(false)} clients={clients} onOpenClientPicker={refreshClients} onSaved={() => { setShowNew(false); load(); }} />
+      <CommitmentModal open={showCommit} onClose={() => setShowCommit(false)} clients={clients} onOpenClientPicker={refreshClients} onSaved={() => { setShowCommit(false); load(); }} />
     </div>
   );
 }
 
-function CollectionCreateModal({ open, onClose, clients, onSaved }) {
+function CollectionCreateModal({ open, onClose, clients, onOpenClientPicker, onSaved }) {
   const [form, setForm] = useState({ client_id: '', importe: '', medio_pago: 'Transferencia bancaria', comprobante: '', factura: '', fecha: new Date().toISOString().slice(0, 10), responsable: '', observaciones: '' });
   if (!open) return null;
   async function save(e) {
     e.preventDefault();
+    // Antes el <select> nativo con `required` bastaba para exigir un cliente;
+    // el buscador de texto no tiene ese mecanismo, así que se valida acá.
+    if (!form.client_id) return alert('Seleccioná un cliente');
     await api.post('/collections', form);
     onSaved();
   }
@@ -167,10 +177,7 @@ function CollectionCreateModal({ open, onClose, clients, onSaved }) {
     <Modal open={open} onClose={onClose} title="Registrar cobranza">
       <form onSubmit={save}>
         <Field label="Cliente *">
-          <select required className={inputCls} value={form.client_id} onChange={e => setForm(f => ({ ...f, client_id: e.target.value }))}>
-            <option value="">Seleccionar...</option>
-            {clients.map(c => <option key={c.id} value={c.id}>{c.razon_social}</option>)}
-          </select>
+          <ClientPicker clients={clients} value={form.client_id} onChange={v => setForm(f => ({ ...f, client_id: v }))} onOpen={onOpenClientPicker} />
         </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Importe *"><input type="number" step="0.01" required className={inputCls} value={form.importe} onChange={e => setForm(f => ({ ...f, importe: e.target.value }))} /></Field>
@@ -196,18 +203,22 @@ function CollectionCreateModal({ open, onClose, clients, onSaved }) {
   );
 }
 
-function CommitmentModal({ open, onClose, clients, onSaved }) {
+function CommitmentModal({ open, onClose, clients, onOpenClientPicker, onSaved }) {
   const [form, setForm] = useState({ client_id: '', importe_comprometido: '', fecha_comprometida: '', responsable: '', observaciones: '' });
   if (!open) return null;
-  async function save(e) { e.preventDefault(); await api.post('/collections/commitments', form); onSaved(); }
+  async function save(e) {
+    e.preventDefault();
+    // Antes el <select> nativo con `required` bastaba para exigir un cliente;
+    // el buscador de texto no tiene ese mecanismo, así que se valida acá.
+    if (!form.client_id) return alert('Seleccioná un cliente');
+    await api.post('/collections/commitments', form);
+    onSaved();
+  }
   return (
     <Modal open={open} onClose={onClose} title="Nuevo compromiso de pago">
       <form onSubmit={save}>
         <Field label="Cliente *">
-          <select required className={inputCls} value={form.client_id} onChange={e => setForm(f => ({ ...f, client_id: e.target.value }))}>
-            <option value="">Seleccionar...</option>
-            {clients.map(c => <option key={c.id} value={c.id}>{c.razon_social}</option>)}
-          </select>
+          <ClientPicker clients={clients} value={form.client_id} onChange={v => setForm(f => ({ ...f, client_id: v }))} onOpen={onOpenClientPicker} />
         </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Importe comprometido *"><input type="number" step="0.01" required className={inputCls} value={form.importe_comprometido} onChange={e => setForm(f => ({ ...f, importe_comprometido: e.target.value }))} /></Field>

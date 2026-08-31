@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/client.js';
 import { KpiCard, Card, Badge, fmtUSD, Loading, Button, Field, inputCls } from '../components/UI.jsx';
+import ClientPicker from '../components/ClientPicker.jsx';
 import { CATEGORICAL, STATUS } from '../colors.js';
 import {
   DollarSign, TrendingUp, FileText, Target, CheckSquare, AlertTriangle, Users, Wallet, Clock, Phone, MapPin, FlaskConical
@@ -153,14 +154,21 @@ function VisitasLlamadasCard() {
     setLoadingList(false);
   }
 
+  // Se usa tanto al montar como cada vez que se abre el buscador de clientes
+  // (ver ClientPicker onOpen más abajo), para que un cliente recién cargado en
+  // otra pestaña/pantalla aparezca sin tener que recargar toda la página.
+  function refreshClients() {
+    return api.get('/clients', { params: { pageSize: 300 } }).then(({ data }) => setClients(data.rows));
+  }
+
   useEffect(() => {
-    api.get('/clients', { params: { pageSize: 300 } }).then(({ data }) => setClients(data.rows));
+    refreshClients();
     loadRecientes();
   }, []);
 
   async function registrar(e) {
     e.preventDefault();
-    if (!form.client_id) return;
+    if (!form.client_id) return alert('Seleccioná un cliente');
     setSaving(true);
     try {
       await api.post('/activities', { ...form, usuario: 'Usuario' });
@@ -177,10 +185,7 @@ function VisitasLlamadasCard() {
       <div className="grid md:grid-cols-2 gap-6">
         <form onSubmit={registrar} className="space-y-1">
           <Field label="Cliente *">
-            <select required className={inputCls} value={form.client_id} onChange={e => setForm(f => ({ ...f, client_id: e.target.value }))}>
-              <option value="">Seleccionar...</option>
-              {clients.map(c => <option key={c.id} value={c.id}>{c.razon_social}</option>)}
-            </select>
+            <ClientPicker clients={clients} value={form.client_id} onChange={v => setForm(f => ({ ...f, client_id: v }))} onOpen={refreshClients} />
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Tipo">

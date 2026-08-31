@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import api from '../api/client.js';
 import { Card, Button, Modal, Field, inputCls, Loading, EmptyState, fmtUSD, fmtDate } from '../components/UI.jsx';
+import ClientPicker from '../components/ClientPicker.jsx';
 import { Plus, Download, Pencil } from 'lucide-react';
 
 const MAX_ITEMS = 5;
@@ -17,16 +18,22 @@ export default function Sales() {
   const [detail, setDetail] = useState(null);
   const [editing, setEditing] = useState(false);
 
+  // Se usa tanto en el load() general como cada vez que se abre el buscador de
+  // clientes del formulario, así un cliente recién cargado en otra pestaña
+  // aparece sin recargar toda la página.
+  function refreshClients() {
+    return api.get('/clients', { params: { pageSize: 200 } }).then(({ data }) => setClients(data.rows));
+  }
+
   async function load() {
     setLoading(true);
     const params2 = Object.fromEntries(Object.entries(filters).filter(([, v]) => v));
-    const [s, c, p] = await Promise.all([
+    const [s, , p] = await Promise.all([
       api.get('/sales', { params: params2 }),
-      api.get('/clients', { params: { pageSize: 200 } }),
+      refreshClients(),
       api.get('/products'),
     ]);
     setRows(s.data);
-    setClients(c.data.rows);
     setProducts(p.data);
     setLoading(false);
   }
@@ -96,6 +103,7 @@ export default function Sales() {
       {showNew && (
         <SaleFormModal
           clients={clients}
+          onOpenClientPicker={refreshClients}
           products={products}
           defaultClientId={params.get('client_id')}
           onClose={() => setShowNew(false)}
@@ -147,7 +155,7 @@ export default function Sales() {
   );
 }
 
-function SaleFormModal({ clients, products, defaultClientId, editingSale, onClose, onSaved }) {
+function SaleFormModal({ clients, onOpenClientPicker, products, defaultClientId, editingSale, onClose, onSaved }) {
   const isEditing = !!editingSale;
   const [clientId, setClientId] = useState(editingSale?.client_id || defaultClientId || '');
   const [fecha, setFecha] = useState(editingSale?.fecha?.slice(0, 10) || new Date().toISOString().slice(0, 10));
@@ -189,10 +197,7 @@ function SaleFormModal({ clients, products, defaultClientId, editingSale, onClos
             {isEditing ? (
               <input disabled className={inputCls + ' bg-gray-50 text-gray-500'} value={clienteActual?.razon_social || editingSale.cliente_nombre || ''} />
             ) : (
-              <select required className={inputCls} value={clientId} onChange={e => setClientId(e.target.value)}>
-                <option value="">Seleccionar...</option>
-                {clients.map(c => <option key={c.id} value={c.id}>{c.razon_social}</option>)}
-              </select>
+              <ClientPicker clients={clients} value={clientId} onChange={setClientId} onOpen={onOpenClientPicker} />
             )}
           </Field>
           <Field label="Fecha"><input type="date" className={inputCls} value={fecha} onChange={e => setFecha(e.target.value)} /></Field>

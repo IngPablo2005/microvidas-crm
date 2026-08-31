@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import api from '../api/client.js';
 import { Card, Button, Modal, Field, inputCls, Loading } from '../components/UI.jsx';
+import ClientPicker from '../components/ClientPicker.jsx';
 import { CATEGORICAL } from '../colors.js';
 import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 
@@ -23,14 +24,20 @@ export default function CalendarPage() {
   const rangeStart = view === 'mes' ? new Date(cursor.getFullYear(), cursor.getMonth(), 1) : view === 'semana' ? startOfWeek(cursor) : cursor;
   const rangeEnd = view === 'mes' ? new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0) : view === 'semana' ? new Date(startOfWeek(cursor).getTime() + 6 * 86400000) : cursor;
 
+  // Se usa tanto en el load() general como cada vez que se abre el buscador de
+  // clientes del formulario, así un cliente recién cargado en otra pestaña
+  // aparece sin recargar toda la página.
+  function refreshClients() {
+    return api.get('/clients', { params: { pageSize: 200 } }).then(({ data }) => setClients(data.rows));
+  }
+
   async function load() {
     setLoading(true);
-    const [e, c] = await Promise.all([
+    const [e] = await Promise.all([
       api.get('/calendar', { params: { desde: toISO(new Date(rangeStart.getTime() - 7 * 86400000)), hasta: toISO(new Date(rangeEnd.getTime() + 7 * 86400000)) } }),
-      api.get('/clients', { params: { pageSize: 200 } }),
+      refreshClients(),
     ]);
     setEvents(e.data);
-    setClients(c.data.rows);
     setLoading(false);
   }
   useEffect(() => { load(); }, [view, cursor]);
@@ -152,10 +159,7 @@ export default function CalendarPage() {
         <form onSubmit={create}>
           <Field label="Título *"><input required className={inputCls} value={form.titulo} onChange={e => setForm(f => ({ ...f, titulo: e.target.value }))} /></Field>
           <Field label="Cliente">
-            <select className={inputCls} value={form.client_id} onChange={e => setForm(f => ({ ...f, client_id: e.target.value }))}>
-              <option value="">— Sin cliente —</option>
-              {clients.map(c => <option key={c.id} value={c.id}>{c.razon_social}</option>)}
-            </select>
+            <ClientPicker clients={clients} value={form.client_id} onChange={v => setForm(f => ({ ...f, client_id: v }))} onOpen={refreshClients} placeholder="Sin cliente (opcional)..." />
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Fecha"><input type="date" className={inputCls} value={form.fecha} onChange={e => setForm(f => ({ ...f, fecha: e.target.value }))} /></Field>

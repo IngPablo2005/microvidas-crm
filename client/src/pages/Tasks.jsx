@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import api from '../api/client.js';
 import { Card, Badge, Button, Modal, Field, inputCls, Loading, EmptyState, fmtDate } from '../components/UI.jsx';
+import ClientPicker from '../components/ClientPicker.jsx';
 import { Plus, Pencil, Trash2, Clock, AlertTriangle } from 'lucide-react';
 
 const ESTADOS = ['Pendiente', 'En proceso', 'Completada', 'Vencida'];
@@ -73,14 +74,20 @@ export default function Tasks() {
   const [toDelete, setToDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
+  // Se usa tanto en el load() general como cada vez que se abre el buscador de
+  // clientes del formulario, así un cliente recién cargado en otra pestaña
+  // aparece sin recargar toda la página.
+  function refreshClients() {
+    return api.get('/clients', { params: { pageSize: 200 } }).then(({ data }) => setClients(data.rows));
+  }
+
   async function load() {
     setLoading(true);
-    const [t, c] = await Promise.all([
+    const [t] = await Promise.all([
       api.get('/tasks', { params: estado ? { estado } : {} }),
-      api.get('/clients', { params: { pageSize: 200 } }),
+      refreshClients(),
     ]);
     setRows(t.data);
-    setClients(c.data.rows);
     setLoading(false);
   }
   useEffect(() => { load(); }, [estado]);
@@ -205,10 +212,7 @@ export default function Tasks() {
         <form onSubmit={save}>
           <Field label="Título *"><input required className={inputCls} value={form.titulo} onChange={e => setForm(f => ({ ...f, titulo: e.target.value }))} /></Field>
           <Field label="Cliente">
-            <select className={inputCls} value={form.client_id} onChange={e => setForm(f => ({ ...f, client_id: e.target.value }))}>
-              <option value="">— Sin cliente —</option>
-              {clients.map(c => <option key={c.id} value={c.id}>{c.razon_social}</option>)}
-            </select>
+            <ClientPicker clients={clients} value={form.client_id} onChange={v => setForm(f => ({ ...f, client_id: v }))} onOpen={refreshClients} placeholder="Sin cliente (opcional)..." />
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Fecha"><input type="date" className={inputCls} value={form.fecha} onChange={e => setForm(f => ({ ...f, fecha: e.target.value }))} /></Field>

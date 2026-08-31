@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import api from '../api/client.js';
 import { Card, Button, Modal, Field, inputCls, Loading, fmtUSD } from '../components/UI.jsx';
+import ClientPicker from '../components/ClientPicker.jsx';
 import { CATEGORICAL } from '../colors.js';
 import { Plus, Pencil } from 'lucide-react';
 
@@ -16,11 +17,17 @@ export default function Pipeline() {
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(empty);
 
+  // Se usa tanto en el load() general como cada vez que se abre el buscador de
+  // clientes del formulario, así un cliente recién cargado en otra pestaña
+  // aparece sin recargar toda la página.
+  function refreshClients() {
+    return api.get('/clients', { params: { pageSize: 200 } }).then(({ data }) => setClients(data.rows));
+  }
+
   async function load() {
     setLoading(true);
-    const [p, c] = await Promise.all([api.get('/pipeline'), api.get('/clients', { params: { pageSize: 200 } })]);
+    const [p] = await Promise.all([api.get('/pipeline'), refreshClients()]);
     setRows(p.data.rows);
-    setClients(c.data.rows);
     setLoading(false);
   }
   useEffect(() => { load(); }, []);
@@ -120,10 +127,7 @@ export default function Pipeline() {
         <form onSubmit={save}>
           <Field label="Título *"><input required className={inputCls} value={form.titulo} onChange={e => setForm(f => ({ ...f, titulo: e.target.value }))} /></Field>
           <Field label="Cliente">
-            <select className={inputCls} value={form.client_id} onChange={e => setForm(f => ({ ...f, client_id: e.target.value }))}>
-              <option value="">— Sin cliente asociado —</option>
-              {clients.map(c => <option key={c.id} value={c.id}>{c.razon_social}</option>)}
-            </select>
+            <ClientPicker clients={clients} value={form.client_id} onChange={v => setForm(f => ({ ...f, client_id: v }))} onOpen={refreshClients} placeholder="Sin cliente asociado (opcional)..." />
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Importe estimado (USD)"><input type="number" className={inputCls} value={form.importe_estimado} onChange={e => setForm(f => ({ ...f, importe_estimado: e.target.value }))} /></Field>
