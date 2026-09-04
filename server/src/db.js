@@ -294,6 +294,7 @@ CREATE TABLE IF NOT EXISTS collections (
   fecha_vencimiento_original TEXT,
   responsable TEXT,
   observaciones TEXT,
+  invoice_id INTEGER REFERENCES invoices(id), -- factura a la que se aplicó esta cobranza (si corresponde); se guarda para poder deshacer/rehacer el efecto sobre el saldo de esa factura al editar o borrar la cobranza
   created_at TEXT DEFAULT (datetime('now'))
 );
 
@@ -377,6 +378,9 @@ CREATE INDEX IF NOT EXISTS idx_client_crops_client ON client_crops(client_id);
   const productCols = (await db.prepare("PRAGMA table_info(products)").all()).map(c => c.name);
   if (!productCols.includes('proveedor_id')) await exec('ALTER TABLE products ADD COLUMN proveedor_id INTEGER REFERENCES proveedores(id)');
   if (!productCols.includes('logo_data_url')) await exec('ALTER TABLE products ADD COLUMN logo_data_url TEXT');
+
+  const collectionCols = (await db.prepare("PRAGMA table_info(collections)").all()).map(c => c.name);
+  if (!collectionCols.includes('invoice_id')) await exec('ALTER TABLE collections ADD COLUMN invoice_id INTEGER REFERENCES invoices(id)');
 
   // Valor por defecto del cuadro de notas de cotización (precio en USD+IVA, tipo de
   // cambio, tarjetas) — sólo se inserta si la clave no existe todavía, para no

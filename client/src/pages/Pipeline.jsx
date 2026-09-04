@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import api from '../api/client.js';
 import { Card, Button, Modal, Field, inputCls, Loading, fmtUSD } from '../components/UI.jsx';
 import ClientPicker from '../components/ClientPicker.jsx';
+import DateInput from '../components/DateInput.jsx';
 import { CATEGORICAL } from '../colors.js';
 import { Plus, Pencil } from 'lucide-react';
 
@@ -140,7 +141,7 @@ export default function Pipeline() {
           </Field>
           <Field label="Responsable"><input className={inputCls} value={form.responsable} onChange={e => setForm(f => ({ ...f, responsable: e.target.value }))} /></Field>
           <Field label="Próxima acción"><input className={inputCls} value={form.proxima_accion} onChange={e => setForm(f => ({ ...f, proxima_accion: e.target.value }))} /></Field>
-          <Field label="Fecha de cierre estimada"><input type="date" className={inputCls} value={form.fecha_cierre_estimada} onChange={e => setForm(f => ({ ...f, fecha_cierre_estimada: e.target.value }))} /></Field>
+          <Field label="Fecha de cierre estimada"><DateInput className={inputCls} value={form.fecha_cierre_estimada} onChange={v => setForm(f => ({ ...f, fecha_cierre_estimada: v }))} /></Field>
           <div className="flex justify-end gap-2 mt-2">
             <Button variant="secondary" type="button" onClick={() => setShowNew(false)}>Cancelar</Button>
             <Button type="submit">{editingId ? 'Guardar cambios' : 'Crear'}</Button>

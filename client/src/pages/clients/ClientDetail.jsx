@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../api/client.js';
 import { Card, Badge, Button, Modal, Field, inputCls, Loading, EmptyState, fmtUSD, fmtDate, fmtDateTime } from '../../components/UI.jsx';
+import DateInput from '../../components/DateInput.jsx';
 import {
   StickyNote, CheckSquare, FileText, ShoppingCart, Award, Image as ImageIcon, CalendarPlus, Phone, Mail,
   MessageCircle, Users as UsersIcon, ArrowLeft, Trash2, Pencil, Sprout
@@ -469,7 +470,7 @@ function VisitCallModal({ clientId, onClose, onSaved }) {
               {TIPOS_CONTACTO_CLIENTE.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
           </Field>
-          <Field label="Fecha"><input type="date" className={inputCls} value={form.fecha} onChange={e => setForm(f => ({ ...f, fecha: e.target.value }))} /></Field>
+          <Field label="Fecha"><DateInput className={inputCls} value={form.fecha} onChange={v => setForm(f => ({ ...f, fecha: v }))} /></Field>
         </div>
         <Field label="Comentario">
           <textarea rows={3} className={inputCls} placeholder="Ej: se mostró interesado en ampliar el pedido..." value={form.descripcion} onChange={e => setForm(f => ({ ...f, descripcion: e.target.value }))} />
@@ -491,7 +492,7 @@ function TaskModal({ clientId, onClose, onSaved }) {
       <form onSubmit={save}>
         <Field label="Título *"><input required className={inputCls} value={form.titulo} onChange={e => setForm(f => ({ ...f, titulo: e.target.value }))} /></Field>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Fecha"><input type="date" className={inputCls} value={form.fecha} onChange={e => setForm(f => ({ ...f, fecha: e.target.value }))} /></Field>
+          <Field label="Fecha"><DateInput className={inputCls} value={form.fecha} onChange={v => setForm(f => ({ ...f, fecha: v }))} /></Field>
           <Field label="Hora"><input type="time" className={inputCls} value={form.hora} onChange={e => setForm(f => ({ ...f, hora: e.target.value }))} /></Field>
         </div>
         <div className="grid grid-cols-2 gap-3">
@@ -522,7 +523,7 @@ function MilestoneModal({ clientId, onClose, onSaved }) {
             {MILESTONE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
           </select>
         </Field>
-        <Field label="Fecha"><input type="date" className={inputCls} value={form.fecha} onChange={e => setForm(f => ({ ...f, fecha: e.target.value }))} /></Field>
+        <Field label="Fecha"><DateInput className={inputCls} value={form.fecha} onChange={v => setForm(f => ({ ...f, fecha: v }))} /></Field>
         <Field label="Descripción"><textarea className={inputCls} rows={2} value={form.descripcion} onChange={e => setForm(f => ({ ...f, descripcion: e.target.value }))} /></Field>
         <div className="flex justify-end gap-2 mt-3"><Button variant="secondary" type="button" onClick={onClose}>Cancelar</Button><Button type="submit">Guardar</Button></div>
       </form>
@@ -562,7 +563,7 @@ function MeetingModal({ clientId, onClose, onSaved }) {
       <form onSubmit={save}>
         <Field label="Título"><input className={inputCls} value={form.titulo} onChange={e => setForm(f => ({ ...f, titulo: e.target.value }))} /></Field>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Fecha"><input type="date" className={inputCls} value={form.fecha} onChange={e => setForm(f => ({ ...f, fecha: e.target.value }))} /></Field>
+          <Field label="Fecha"><DateInput className={inputCls} value={form.fecha} onChange={v => setForm(f => ({ ...f, fecha: v }))} /></Field>
           <Field label="Hora"><input type="time" className={inputCls} value={form.hora} onChange={e => setForm(f => ({ ...f, hora: e.target.value }))} /></Field>
         </div>
         <Field label="Recordatorio">
@@ -649,8 +650,8 @@ function EditClientModal({ client, onClose, onSaved }) {
           </select>
         </Field>
         <Field label="Responsable comercial"><input className={inputCls} value={form.responsable_comercial} onChange={set('responsable_comercial')} /></Field>
-        <Field label="Último contacto"><input type="date" className={inputCls} value={form.ultimo_contacto || ''} onChange={set('ultimo_contacto')} /></Field>
-        <Field label="Próximo contacto"><input type="date" className={inputCls} value={form.proximo_contacto || ''} onChange={set('proximo_contacto')} /></Field>
+        <Field label="Último contacto"><DateInput className={inputCls} value={form.ultimo_contacto || ''} onChange={v => setForm(f => ({ ...f, ultimo_contacto: v }))} /></Field>
+        <Field label="Próximo contacto"><DateInput className={inputCls} value={form.proximo_contacto || ''} onChange={v => setForm(f => ({ ...f, proximo_contacto: v }))} /></Field>
         <div className="col-span-2">
           <Field label="Observaciones"><textarea className={inputCls} rows={3} value={form.observaciones} onChange={set('observaciones')} /></Field>
         </div>
@@ -695,7 +696,7 @@ function CollectionModal({ open, onClose, clientId, invoices, onSaved }) {
         </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Importe"><input type="number" step="0.01" required className={inputCls} value={form.importe} onChange={e => setForm(f => ({ ...f, importe: e.target.value }))} /></Field>
-          <Field label="Fecha"><input type="date" className={inputCls} value={form.fecha} onChange={e => setForm(f => ({ ...f, fecha: e.target.value }))} /></Field>
+          <Field label="Fecha"><DateInput className={inputCls} value={form.fecha} onChange={v => setForm(f => ({ ...f, fecha: v }))} /></Field>
         </div>
         <Field label="Medio de pago">
           <select className={inputCls} value={form.medio_pago} onChange={e => setForm(f => ({ ...f, medio_pago: e.target.value }))}>

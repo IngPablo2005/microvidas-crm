@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api/client.js';
-import { Card, KpiCard, Badge, Button, Modal, Field, inputCls, Loading, EmptyState, fmtUSD, fmtDate } from '../components/UI.jsx';
+import { Card, KpiCard, Badge, Button, Modal, Field, inputCls, Loading, EmptyState, fmtUSD, fmtMoneda, fmtDate } from '../components/UI.jsx';
 import ClientPicker from '../components/ClientPicker.jsx';
+import DateInput from '../components/DateInput.jsx';
 import { STATUS } from '../colors.js';
-import { Plus, Download, Wallet } from 'lucide-react';
+import { Plus, Download, Wallet, Pencil, CheckCircle2 } from 'lucide-react';
 
 const MEDIOS_PAGO = ['Transferencia bancaria', 'Cheque', 'Efectivo', 'E-cheq', 'Tarjeta', 'Otro'];
+const MONEDAS = ['USD', 'ARS'];
 
 export default function Collections() {
   const [dash, setDash] = useState(null);
@@ -17,6 +19,8 @@ export default function Collections() {
   const [loading, setLoading] = useState(true);
   const [showNew, setShowNew] = useState(false);
   const [showCommit, setShowCommit] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [markingPaid, setMarkingPaid] = useState(null);
   const [tab, setTab] = useState('cobranzas');
 
   // Se usa tanto en el load() general como cada vez que se abre el buscador de
@@ -46,6 +50,31 @@ export default function Collections() {
   async function markCommitment(id, estado) {
     await api.patch(`/collections/commitments/${id}/estado`, { estado });
     load();
+  }
+
+  // "Tildar como cobrada" una factura pendiente: registra una cobranza por el
+  // saldo restante (mismo endpoint que usa "Registrar cobranza"), lo que además
+  // deja el pago en el historial de Cobranzas y en la cuenta corriente del
+  // cliente, en vez de sólo cambiar el estado de la factura sin dejar rastro.
+  async function markInvoicePaid(inv) {
+    if (!window.confirm(`¿Marcar la factura ${inv.numero} (saldo ${fmtMoneda(inv.saldo, inv.moneda)}) como cobrada?`)) return;
+    setMarkingPaid(inv.id);
+    try {
+      await api.post('/collections', {
+        client_id: inv.client_id,
+        invoice_id: inv.id,
+        factura: inv.numero,
+        importe: inv.saldo,
+        moneda: inv.moneda || 'USD',
+        medio_pago: 'Transferencia bancaria',
+        fecha: new Date().toISOString().slice(0, 10),
+        observaciones: 'Marcada como cobrada desde Facturas.',
+        usuario: 'Usuario',
+      });
+      load();
+    } finally {
+      setMarkingPaid(null);
+    }
   }
 
   if (loading || !dash) return <Loading />;
@@ -86,7 +115,7 @@ export default function Collections() {
           {rows.length === 0 ? <EmptyState text="Sin cobranzas registradas." /> : (
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
-                <tr><th className="text-left px-4 py-2.5">Fecha</th><th className="text-left px-4 py-2.5">Cliente</th><th className="text-left px-4 py-2.5">Factura</th><th className="text-left px-4 py-2.5">Medio de pago</th><th className="text-right px-4 py-2.5">Importe</th></tr>
+                <tr><th className="text-left px-4 py-2.5">Fecha</th><th className="text-left px-4 py-2.5">Cliente</th><th className="text-left px-4 py-2.5">Factura</th><th className="text-left px-4 py-2.5">Medio de pago</th><th className="text-right px-4 py-2.5">Importe</th><th className="px-4 py-2.5"></th></tr>
               </thead>
               <tbody>
                 {rows.map(r => (
@@ -95,7 +124,12 @@ export default function Collections() {
                     <td className="px-4 py-2.5"><Link to={`/clientes/${r.client_id}`} className="font-medium text-gray-800 hover:text-blue-600">{r.cliente_nombre}</Link></td>
                     <td className="px-4 py-2.5 text-gray-600">{r.factura}</td>
                     <td className="px-4 py-2.5 text-gray-600">{r.medio_pago}</td>
-                    <td className="px-4 py-2.5 text-right font-medium">{fmtUSD(r.importe)}</td>
+                    <td className="px-4 py-2.5 text-right font-medium">{fmtMoneda(r.importe, r.moneda)}</td>
+                    <td className="px-4 py-2.5 text-right">
+                      <button title="Editar cobranza" onClick={() => setEditing(r)} className="text-gray-400 hover:text-blue-600 p-1 rounded hover:bg-blue-50">
+                        <Pencil size={14} />
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -108,7 +142,7 @@ export default function Collections() {
         <Card className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
-              <tr><th className="text-left px-4 py-2.5">Número</th><th className="text-left px-4 py-2.5">Cliente</th><th className="text-left px-4 py-2.5">Vencimiento</th><th className="text-right px-4 py-2.5">Importe</th><th className="text-right px-4 py-2.5">Saldo</th><th className="text-left px-4 py-2.5">Estado</th></tr>
+              <tr><th className="text-left px-4 py-2.5">Número</th><th className="text-left px-4 py-2.5">Cliente</th><th className="text-left px-4 py-2.5">Vencimiento</th><th className="text-right px-4 py-2.5">Importe</th><th className="text-right px-4 py-2.5">Saldo</th><th className="text-left px-4 py-2.5">Estado</th><th className="px-4 py-2.5"></th></tr>
             </thead>
             <tbody>
               {invoices.map(i => (
@@ -116,9 +150,22 @@ export default function Collections() {
                   <td className="px-4 py-2.5">{i.numero}</td>
                   <td className="px-4 py-2.5"><Link to={`/clientes/${i.client_id}`} className="font-medium text-gray-800 hover:text-blue-600">{i.cliente_nombre}</Link></td>
                   <td className="px-4 py-2.5 text-gray-500">{fmtDate(i.fecha_vencimiento)}</td>
-                  <td className="px-4 py-2.5 text-right">{fmtUSD(i.importe)}</td>
-                  <td className="px-4 py-2.5 text-right font-medium">{fmtUSD(i.saldo)}</td>
+                  <td className="px-4 py-2.5 text-right">{fmtMoneda(i.importe, i.moneda)}</td>
+                  <td className="px-4 py-2.5 text-right font-medium">{fmtMoneda(i.saldo, i.moneda)}</td>
                   <td className="px-4 py-2.5"><Badge text={i.estado} /></td>
+                  <td className="px-4 py-2.5">
+                    {i.saldo > 0 && (
+                      <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer hover:text-green-600" title="Marcar como cobrada">
+                        <input
+                          type="checkbox"
+                          disabled={markingPaid === i.id}
+                          onChange={() => markInvoicePaid(i)}
+                          className="accent-green-600"
+                        />
+                        <CheckCircle2 size={13} /> Cobrada
+                      </label>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -156,33 +203,67 @@ export default function Collections() {
         </Card>
       )}
 
-      <CollectionCreateModal open={showNew} onClose={() => setShowNew(false)} clients={clients} onOpenClientPicker={refreshClients} onSaved={() => { setShowNew(false); load(); }} />
+      {showNew && (
+        <CollectionFormModal onClose={() => setShowNew(false)} clients={clients} onOpenClientPicker={refreshClients} onSaved={() => { setShowNew(false); load(); }} />
+      )}
+      {editing && (
+        <CollectionFormModal editing={editing} onClose={() => setEditing(null)} clients={clients} onOpenClientPicker={refreshClients} onSaved={() => { setEditing(null); load(); }} />
+      )}
       <CommitmentModal open={showCommit} onClose={() => setShowCommit(false)} clients={clients} onOpenClientPicker={refreshClients} onSaved={() => { setShowCommit(false); load(); }} />
     </div>
   );
 }
 
-function CollectionCreateModal({ open, onClose, clients, onOpenClientPicker, onSaved }) {
-  const [form, setForm] = useState({ client_id: '', importe: '', medio_pago: 'Transferencia bancaria', comprobante: '', factura: '', fecha: new Date().toISOString().slice(0, 10), responsable: '', observaciones: '' });
-  if (!open) return null;
+// Mismo formulario para "Registrar cobranza" y "Editar cobranza" — con `editing`
+// (la fila de la cobranza ya cargada) arranca precargado y guarda con PUT en
+// vez de POST. El cliente no se puede cambiar al editar (la cobranza queda
+// atada a la cuenta corriente del cliente con el que se creó).
+function CollectionFormModal({ editing, onClose, clients, onOpenClientPicker, onSaved }) {
+  const isEditing = !!editing;
+  const [form, setForm] = useState({
+    client_id: editing?.client_id || '', importe: editing?.importe ?? '', moneda: editing?.moneda || 'USD',
+    medio_pago: editing?.medio_pago || 'Transferencia bancaria', comprobante: editing?.comprobante || '', factura: editing?.factura || '',
+    fecha: editing?.fecha?.slice(0, 10) || new Date().toISOString().slice(0, 10), responsable: editing?.responsable || '', observaciones: editing?.observaciones || '',
+  });
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const clienteActual = clients.find(c => String(c.id) === String(form.client_id));
+
   async function save(e) {
     e.preventDefault();
     // Antes el <select> nativo con `required` bastaba para exigir un cliente;
     // el buscador de texto no tiene ese mecanismo, así que se valida acá.
     if (!form.client_id) return alert('Seleccioná un cliente');
-    await api.post('/collections', form);
-    onSaved();
+    setSaving(true);
+    setSaveError('');
+    try {
+      if (isEditing) await api.put(`/collections/${editing.id}`, form);
+      else await api.post('/collections', form);
+      onSaved();
+    } catch (err) {
+      setSaveError('No se pudo guardar la cobranza. Probá de nuevo en unos segundos.');
+      setSaving(false);
+    }
   }
   return (
-    <Modal open={open} onClose={onClose} title="Registrar cobranza">
+    <Modal open={open} onClose={onClose} title={isEditing ? 'Editar cobranza' : 'Registrar cobranza'}>
       <form onSubmit={save}>
-        <Field label="Cliente *">
-          <ClientPicker clients={clients} value={form.client_id} onChange={v => setForm(f => ({ ...f, client_id: v }))} onOpen={onOpenClientPicker} />
-        </Field>
+        {isEditing ? (
+          <Field label="Cliente"><div className="text-sm font-medium text-gray-700 py-1.5">{clienteActual?.razon_social || editing.cliente_nombre}</div></Field>
+        ) : (
+          <Field label="Cliente *">
+            <ClientPicker clients={clients} value={form.client_id} onChange={v => setForm(f => ({ ...f, client_id: v }))} onOpen={onOpenClientPicker} />
+          </Field>
+        )}
         <div className="grid grid-cols-2 gap-3">
           <Field label="Importe *"><input type="number" step="0.01" required className={inputCls} value={form.importe} onChange={e => setForm(f => ({ ...f, importe: e.target.value }))} /></Field>
-          <Field label="Fecha"><input type="date" className={inputCls} value={form.fecha} onChange={e => setForm(f => ({ ...f, fecha: e.target.value }))} /></Field>
+          <Field label="Moneda">
+            <select className={inputCls} value={form.moneda} onChange={e => setForm(f => ({ ...f, moneda: e.target.value }))}>
+              {MONEDAS.map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+          </Field>
         </div>
+        <Field label="Fecha"><DateInput className={inputCls} value={form.fecha} onChange={v => setForm(f => ({ ...f, fecha: v }))} /></Field>
         <Field label="Medio de pago">
           <select className={inputCls} value={form.medio_pago} onChange={e => setForm(f => ({ ...f, medio_pago: e.target.value }))}>
             {MEDIOS_PAGO.map(m => <option key={m} value={m}>{m}</option>)}
@@ -194,9 +275,10 @@ function CollectionCreateModal({ open, onClose, clients, onOpenClientPicker, onS
         </div>
         <Field label="Responsable"><input className={inputCls} value={form.responsable} onChange={e => setForm(f => ({ ...f, responsable: e.target.value }))} /></Field>
         <Field label="Observaciones"><textarea className={inputCls} rows={2} value={form.observaciones} onChange={e => setForm(f => ({ ...f, observaciones: e.target.value }))} /></Field>
+        {saveError && <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2 mt-2">{saveError}</div>}
         <div className="flex justify-end gap-2 mt-2">
-          <Button variant="secondary" type="button" onClick={onClose}>Cancelar</Button>
-          <Button type="submit">Registrar</Button>
+          <Button variant="secondary" type="button" onClick={onClose} disabled={saving}>Cancelar</Button>
+          <Button type="submit" disabled={saving}>{saving ? 'Guardando...' : (isEditing ? 'Guardar cambios' : 'Registrar')}</Button>
         </div>
       </form>
     </Modal>
@@ -222,7 +304,7 @@ function CommitmentModal({ open, onClose, clients, onOpenClientPicker, onSaved }
         </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Importe comprometido *"><input type="number" step="0.01" required className={inputCls} value={form.importe_comprometido} onChange={e => setForm(f => ({ ...f, importe_comprometido: e.target.value }))} /></Field>
-          <Field label="Fecha comprometida"><input type="date" className={inputCls} value={form.fecha_comprometida} onChange={e => setForm(f => ({ ...f, fecha_comprometida: e.target.value }))} /></Field>
+          <Field label="Fecha comprometida"><DateInput className={inputCls} value={form.fecha_comprometida} onChange={v => setForm(f => ({ ...f, fecha_comprometida: v }))} /></Field>
         </div>
         <Field label="Responsable"><input className={inputCls} value={form.responsable} onChange={e => setForm(f => ({ ...f, responsable: e.target.value }))} /></Field>
         <Field label="Observaciones"><textarea className={inputCls} rows={2} value={form.observaciones} onChange={e => setForm(f => ({ ...f, observaciones: e.target.value }))} /></Field>

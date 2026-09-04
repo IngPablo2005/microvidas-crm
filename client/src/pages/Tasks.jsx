@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import api from '../api/client.js';
 import { Card, Badge, Button, Modal, Field, inputCls, Loading, EmptyState, fmtDate } from '../components/UI.jsx';
 import ClientPicker from '../components/ClientPicker.jsx';
+import DateInput from '../components/DateInput.jsx';
 import { Plus, Pencil, Trash2, Clock, AlertTriangle } from 'lucide-react';
 
 const ESTADOS = ['Pendiente', 'En proceso', 'Completada', 'Vencida'];
@@ -52,7 +53,7 @@ function PostponeModal({ task, onClose, onSaved }) {
         <Button variant="secondary" disabled={saving} onClick={() => apply(addDays(task.fecha, 7))}>+7 días</Button>
       </div>
       <Field label="O elegir una fecha puntual">
-        <input type="date" className={inputCls} value={fecha} onChange={e => setFecha(e.target.value)} />
+        <DateInput className={inputCls} value={fecha} onChange={v => setFecha(v)} />
       </Field>
       <div className="flex justify-end gap-2 mt-3">
         <Button variant="secondary" type="button" onClick={onClose} disabled={saving}>Cancelar</Button>
@@ -215,7 +216,7 @@ export default function Tasks() {
             <ClientPicker clients={clients} value={form.client_id} onChange={v => setForm(f => ({ ...f, client_id: v }))} onOpen={refreshClients} placeholder="Sin cliente (opcional)..." />
           </Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Fecha"><input type="date" className={inputCls} value={form.fecha} onChange={e => setForm(f => ({ ...f, fecha: e.target.value }))} /></Field>
+            <Field label="Fecha"><DateInput className={inputCls} value={form.fecha} onChange={v => setForm(f => ({ ...f, fecha: v }))} /></Field>
             <Field label="Hora"><input type="time" className={inputCls} value={form.hora} onChange={e => setForm(f => ({ ...f, hora: e.target.value }))} /></Field>
           </div>
           <div className="grid grid-cols-2 gap-3">

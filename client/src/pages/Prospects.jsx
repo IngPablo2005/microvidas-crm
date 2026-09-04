@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/client.js';
 import { Card, Badge, Button, Modal, Field, inputCls, Loading, EmptyState, fmtUSD, fmtDate } from '../components/UI.jsx';
+import DateInput from '../components/DateInput.jsx';
 import { Plus, ArrowRightCircle } from 'lucide-react';
 
 const ESTADOS = ['Nuevo', 'Contactado', 'Calificado', 'Cotizacion', 'Negociacion', 'Ganado', 'Perdido'];
@@ -105,7 +106,7 @@ export default function Prospects() {
           <Field label="Potencial estimado (USD)"><input type="number" className={inputCls} value={form.potencial_estimado} onChange={e => setForm(f => ({ ...f, potencial_estimado: e.target.value }))} /></Field>
           <Field label="Producto / interés"><input className={inputCls} value={form.interes} onChange={e => setForm(f => ({ ...f, interes: e.target.value }))} /></Field>
           <Field label="Responsable"><input className={inputCls} value={form.responsable} onChange={e => setForm(f => ({ ...f, responsable: e.target.value }))} /></Field>
-          <Field label="Próximo contacto"><input type="date" className={inputCls} value={form.proximo_contacto} onChange={e => setForm(f => ({ ...f, proximo_contacto: e.target.value }))} /></Field>
+          <Field label="Próximo contacto"><DateInput className={inputCls} value={form.proximo_contacto} onChange={v => setForm(f => ({ ...f, proximo_contacto: v }))} /></Field>
           <Field label="Probabilidad (%)"><input type="number" min="0" max="100" className={inputCls} value={form.probabilidad} onChange={e => setForm(f => ({ ...f, probabilidad: e.target.value }))} /></Field>
           <div className="col-span-2 flex justify-end gap-2 mt-2">
             <Button variant="secondary" type="button" onClick={() => setShowNew(false)}>Cancelar</Button>

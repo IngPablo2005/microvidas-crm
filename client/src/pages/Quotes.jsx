@@ -4,6 +4,7 @@ import api from '../api/client.js';
 import { Card, Badge, Button, Modal, Field, inputCls, Loading, EmptyState, fmtPrecio, fmtDate } from '../components/UI.jsx';
 import ClientPicker from '../components/ClientPicker.jsx';
 import PasteTable from '../components/PasteTable.jsx';
+import DateInput from '../components/DateInput.jsx';
 import { Plus, Download, Pencil, FileText, Trash2 } from 'lucide-react';
 
 const LOGO_SRC = '/branding/microvidas-logo.png';
@@ -366,7 +367,7 @@ function QuoteFormModal({ clients, onOpenClientPicker, products, defaultClientId
               <ClientPicker clients={clients} value={clientId} onChange={setClientId} onOpen={onOpenClientPicker} />
             )}
           </Field>
-          <Field label="Vencimiento"><input type="date" className={inputCls} value={fechaVencimiento} onChange={e => setFechaVencimiento(e.target.value)} /></Field>
+          <Field label="Vencimiento"><DateInput className={inputCls} value={fechaVencimiento} onChange={v => setFechaVencimiento(v)} /></Field>
           <Field label="Responsable"><input className={inputCls} value={responsable} onChange={e => setResponsable(e.target.value)} /></Field>
         </div>
 

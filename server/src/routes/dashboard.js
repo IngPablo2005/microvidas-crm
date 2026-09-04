@@ -67,10 +67,16 @@ router.get('/', async (req, res) => {
   const tasaConversionCotizaciones = totalCotizaciones ? Math.round((cotAceptadas / totalCotizaciones) * 100) : 0;
 
   // Cobranzas
-  const cobradoHoy = (await db.prepare(`SELECT COALESCE(SUM(importe),0) v FROM collections WHERE fecha = ?`).get(t)).v;
-  const cobradoSemana = (await db.prepare(`SELECT COALESCE(SUM(importe),0) v FROM collections WHERE fecha >= ?`).get(semanaInicio.toISOString().slice(0, 10))).v;
-  const cobradoMes = (await db.prepare(`SELECT COALESCE(SUM(importe),0) v FROM collections WHERE strftime('%Y-%m', fecha) = ?`).get(mesActual)).v;
-  const cobradoAnio = (await db.prepare(`SELECT COALESCE(SUM(importe),0) v FROM collections WHERE strftime('%Y', fecha) = ?`).get(anioActual)).v;
+  // Estos totales se muestran con fmtUSD (KPIs "Cobrado hoy/semana/mes/año") —
+  // desde que se puede registrar una cobranza en pesos, se filtran a
+  // moneda='USD' para no sumar dólares y pesos como si fueran la misma unidad
+  // (no hay una cotización cargada en la app para convertir automáticamente).
+  // Las cobranzas en ARS quedan igual en la lista de Cobranzas y en la cuenta
+  // corriente del cliente, sólo no entran en estos totales en dólares.
+  const cobradoHoy = (await db.prepare(`SELECT COALESCE(SUM(importe),0) v FROM collections WHERE fecha = ? AND moneda = 'USD'`).get(t)).v;
+  const cobradoSemana = (await db.prepare(`SELECT COALESCE(SUM(importe),0) v FROM collections WHERE fecha >= ? AND moneda = 'USD'`).get(semanaInicio.toISOString().slice(0, 10))).v;
+  const cobradoMes = (await db.prepare(`SELECT COALESCE(SUM(importe),0) v FROM collections WHERE strftime('%Y-%m', fecha) = ? AND moneda = 'USD'`).get(mesActual)).v;
+  const cobradoAnio = (await db.prepare(`SELECT COALESCE(SUM(importe),0) v FROM collections WHERE strftime('%Y', fecha) = ? AND moneda = 'USD'`).get(anioActual)).v;
   const cuentasACobrar = (await db.prepare(`SELECT COALESCE(SUM(saldo),0) v FROM invoices WHERE saldo > 0`).get()).v;
   const vencido = (await db.prepare(`SELECT COALESCE(SUM(saldo),0) v FROM invoices WHERE estado = 'Vencida' AND saldo > 0`).get()).v;
   const proximosVencimientos = (await db.prepare(`SELECT COALESCE(SUM(saldo),0) v FROM invoices WHERE saldo > 0 AND fecha_vencimiento BETWEEN ? AND date(?, '+7 days')`).get(t, t)).v;

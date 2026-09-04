@@ -92,6 +92,16 @@ export function fmtPrecio(n) {
   return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(n || 0);
 }
 
+// Formatea un importe según su moneda real (USD o ARS) — se usa en Cobranzas,
+// donde una cobranza puede quedar cargada en pesos y no siempre corresponde
+// mostrarla con el signo de dólar de fmtUSD.
+export function fmtMoneda(n, moneda = 'USD') {
+  if (moneda === 'ARS') {
+    return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n || 0);
+  }
+  return fmtUSD(n);
+}
+
 function pad2(n) {
   return String(n).padStart(2, '0');
 }

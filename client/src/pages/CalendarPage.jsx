@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import api from '../api/client.js';
 import { Card, Button, Modal, Field, inputCls, Loading } from '../components/UI.jsx';
 import ClientPicker from '../components/ClientPicker.jsx';
+import DateInput from '../components/DateInput.jsx';
 import { CATEGORICAL } from '../colors.js';
 import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 
@@ -162,7 +163,7 @@ export default function CalendarPage() {
             <ClientPicker clients={clients} value={form.client_id} onChange={v => setForm(f => ({ ...f, client_id: v }))} onOpen={refreshClients} placeholder="Sin cliente (opcional)..." />
           </Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Fecha"><input type="date" className={inputCls} value={form.fecha} onChange={e => setForm(f => ({ ...f, fecha: e.target.value }))} /></Field>
+            <Field label="Fecha"><DateInput className={inputCls} value={form.fecha} onChange={v => setForm(f => ({ ...f, fecha: v }))} /></Field>
             <Field label="Hora"><input type="time" className={inputCls} value={form.hora} onChange={e => setForm(f => ({ ...f, hora: e.target.value }))} /></Field>
           </div>
           <div className="grid grid-cols-2 gap-3">

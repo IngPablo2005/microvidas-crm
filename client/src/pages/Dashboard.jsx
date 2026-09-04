@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../api/client.js';
 import { KpiCard, Card, Badge, fmtUSD, fmtDateTime, Loading, Button, Field, inputCls } from '../components/UI.jsx';
 import ClientPicker from '../components/ClientPicker.jsx';
+import DateInput from '../components/DateInput.jsx';
 import { CATEGORICAL, STATUS } from '../colors.js';
 import {
   DollarSign, TrendingUp, FileText, Target, CheckSquare, AlertTriangle, Users, Wallet, Clock, Phone, MapPin, FlaskConical
@@ -194,7 +195,7 @@ function VisitasLlamadasCard() {
               </select>
             </Field>
             <Field label="Fecha">
-              <input type="date" className={inputCls} value={form.fecha} onChange={e => setForm(f => ({ ...f, fecha: e.target.value }))} />
+              <DateInput className={inputCls} value={form.fecha} onChange={v => setForm(f => ({ ...f, fecha: v }))} />
             </Field>
           </div>
           <Field label="Comentario">

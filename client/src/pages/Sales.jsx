@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import api from '../api/client.js';
 import { Card, Button, Modal, Field, inputCls, Loading, EmptyState, fmtUSD, fmtDate } from '../components/UI.jsx';
 import ClientPicker from '../components/ClientPicker.jsx';
+import DateInput from '../components/DateInput.jsx';
 import { Plus, Download, Pencil } from 'lucide-react';
 
 const MAX_ITEMS = 5;
@@ -200,7 +201,7 @@ function SaleFormModal({ clients, onOpenClientPicker, products, defaultClientId,
               <ClientPicker clients={clients} value={clientId} onChange={setClientId} onOpen={onOpenClientPicker} />
             )}
           </Field>
-          <Field label="Fecha"><input type="date" className={inputCls} value={fecha} onChange={e => setFecha(e.target.value)} /></Field>
+          <Field label="Fecha"><DateInput className={inputCls} value={fecha} onChange={v => setFecha(v)} /></Field>
           <Field label="Vendedor"><input className={inputCls} value={vendedor} onChange={e => setVendedor(e.target.value)} /></Field>
         </div>
 

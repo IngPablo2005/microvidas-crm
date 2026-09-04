@@ -19,25 +19,82 @@ router.get('/', async (req, res) => {
 
 router.post('/', async (req, res) => {
   const c = req.body;
-  const id = (await db.prepare(`INSERT INTO collections (client_id, fecha, comprobante, factura, importe, moneda, medio_pago, fecha_vencimiento_original, responsable, observaciones)
-    VALUES (?,?,?,?,?,?,?,?,?,?)`).run(
+  const id = (await db.prepare(`INSERT INTO collections (client_id, fecha, comprobante, factura, importe, moneda, medio_pago, fecha_vencimiento_original, responsable, observaciones, invoice_id)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?)`).run(
     c.client_id, c.fecha || new Date().toISOString().slice(0, 10), c.comprobante ?? null, c.factura ?? null, c.importe || 0,
-    c.moneda || 'USD', c.medio_pago || 'Transferencia bancaria', c.fecha_vencimiento_original ?? null, c.responsable ?? null, c.observaciones ?? null
+    c.moneda || 'USD', c.medio_pago || 'Transferencia bancaria', c.fecha_vencimiento_original ?? null, c.responsable ?? null, c.observaciones ?? null,
+    c.invoice_id || null
   )).lastInsertRowid;
-  // Aplicar contra factura si corresponde
-  if (c.invoice_id) {
-    const inv = await db.prepare('SELECT * FROM invoices WHERE id = ?').get(c.invoice_id);
-    if (inv) {
-      const nuevoSaldo = Math.max(0, inv.saldo - Number(c.importe || 0));
-      const estado = nuevoSaldo === 0 ? 'Pagada' : inv.estado;
-      await db.prepare('UPDATE invoices SET saldo = ?, estado = ? WHERE id = ?').run(nuevoSaldo, estado, c.invoice_id);
-    }
-  }
+  // Aplicar contra factura si corresponde (se guarda invoice_id en la cobranza
+  // para poder deshacer este mismo ajuste si más adelante se edita o se borra).
+  await ajustarSaldoFactura(c.invoice_id, c.importe, -1);
   await logActivity(c.client_id, 'Cobranza', `Cobranza registrada por ${c.moneda || 'USD'} ${Number(c.importe || 0).toFixed(2)} (${c.medio_pago}).`, c.usuario, 'collections', id);
   res.status(201).json({ id });
 });
 
+// Aplica (o reaplica) el efecto de una cobranza sobre el saldo de la factura a
+// la que está asociada. signo = -1 para aplicarla (resta del saldo, lo que
+// hace POST /) y +1 para deshacerla (se la devuelve al saldo, primer paso de
+// PUT /:id antes de aplicar los valores nuevos). Nunca dispara si no hay
+// invoice_id — las cobranzas sin factura asociada no tocan ningún saldo.
+async function ajustarSaldoFactura(invoiceId, importe, signo) {
+  if (!invoiceId) return;
+  const inv = await db.prepare('SELECT * FROM invoices WHERE id = ?').get(invoiceId);
+  if (!inv) return;
+  const nuevoSaldo = Math.max(0, Math.min(inv.importe, inv.saldo + signo * Number(importe || 0)));
+  // Si el saldo vuelve a quedar en positivo (ej. se deshace una cobranza que la
+  // había dejado en 0/"Pagada"), el estado vuelve a "Pendiente" — salvo que ya
+  // estuviera en otro estado manual (ej. no debería pisar "Vencida" al revés,
+  // pero acá no se puede saber la fecha de vencimiento sin otra consulta, así
+  // que sólo se corrige el caso más común: "Pagada" con saldo > 0 no tiene sentido).
+  const estado = nuevoSaldo === 0 ? 'Pagada' : (inv.estado === 'Pagada' ? 'Pendiente' : inv.estado);
+  await db.prepare('UPDATE invoices SET saldo = ?, estado = ? WHERE id = ?').run(nuevoSaldo, estado, invoiceId);
+}
+
+// Edita una cobranza ya cargada. Si estaba (o queda) asociada a una factura,
+// se recalcula el saldo de esa factura en dos pasos: primero se le devuelve lo
+// que la cobranza vieja le había restado, después se le vuelve a restar el
+// importe nuevo — así cambiar el importe, la factura asociada, o directamente
+// desvincularla, deja el saldo de cualquier factura involucrada consistente
+// (en vez de ir arrastrando el desajuste, que es lo que pasaría si sólo se
+// aplicara la diferencia sin pasar por este ida y vuelta).
+router.put('/:id', async (req, res) => {
+  const existing = await db.prepare('SELECT * FROM collections WHERE id = ?').get(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'Cobranza no encontrada' });
+  const c = req.body;
+
+  await ajustarSaldoFactura(existing.invoice_id, existing.importe, +1);
+
+  await db.prepare(`UPDATE collections SET fecha=?, comprobante=?, factura=?, importe=?, moneda=?, medio_pago=?, fecha_vencimiento_original=?, responsable=?, observaciones=? WHERE id=?`)
+    .run(
+      c.fecha || existing.fecha,
+      c.comprobante ?? existing.comprobante,
+      c.factura ?? existing.factura,
+      c.importe ?? existing.importe,
+      c.moneda ?? existing.moneda,
+      c.medio_pago ?? existing.medio_pago,
+      c.fecha_vencimiento_original ?? existing.fecha_vencimiento_original,
+      c.responsable ?? existing.responsable,
+      c.observaciones ?? existing.observaciones,
+      req.params.id
+    );
+
+  const invoiceIdNuevo = c.invoice_id !== undefined ? (c.invoice_id || null) : existing.invoice_id;
+  await ajustarSaldoFactura(invoiceIdNuevo, c.importe ?? existing.importe, -1);
+  if (invoiceIdNuevo !== existing.invoice_id) {
+    await db.prepare('UPDATE collections SET invoice_id = ? WHERE id = ?').run(invoiceIdNuevo, req.params.id);
+  }
+
+  await logActivity(existing.client_id, 'Cobranza', `Cobranza editada: ${c.moneda ?? existing.moneda} ${Number(c.importe ?? existing.importe).toFixed(2)} (${c.medio_pago ?? existing.medio_pago}).`, c.usuario, 'collections', req.params.id);
+  res.json({ ok: true });
+});
+
 router.delete('/:id', async (req, res) => {
+  const existing = await db.prepare('SELECT * FROM collections WHERE id = ?').get(req.params.id);
+  // Al borrar una cobranza que estaba aplicada a una factura, se le devuelve el
+  // saldo — si no, la factura queda "cobrada" de más y nunca se puede volver a
+  // registrar bien esa cobranza.
+  if (existing) await ajustarSaldoFactura(existing.invoice_id, existing.importe, +1);
   await db.prepare('DELETE FROM collections WHERE id = ?').run(req.params.id);
   res.json({ ok: true });
 });
