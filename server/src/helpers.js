@@ -10,6 +10,28 @@ export function todayStr() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function pad2(n) {
+  return String(n).padStart(2, '0');
+}
+
+// Formatea una fecha como dd/mm/aaaa para el PDF de cotizaciones y el reporte
+// semanal. Igual que en el frontend (UI.jsx), si el valor es una fecha "sola"
+// sin hora (ej. "2026-09-04", como se guardan fecha/fecha_vencimiento de
+// cotizaciones y las fechas del reporte semanal) se arma el string
+// directamente en vez de pasar por new Date(), para no arriesgarse a un
+// corrimiento de día si el servidor corriera en un huso horario negativo.
+export function fmtFechaAR(d) {
+  if (!d) return '';
+  const soloFecha = typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d);
+  if (soloFecha) {
+    const [y, m, day] = d.split('-');
+    return `${day}/${m}/${y}`;
+  }
+  const date = new Date(d);
+  if (isNaN(date.getTime())) return d;
+  return `${pad2(date.getDate())}/${pad2(date.getMonth() + 1)}/${date.getFullYear()}`;
+}
+
 // Quita acentos y diferencias de mayúsculas/espacios para poder agrupar texto
 // cargado a mano (ej. nombres de producto escritos "a ojo" en una venta) sin que
 // "Fosfi Q" y "fosfi q" o "Astarté N20" y "Astarte N20" cuenten como cosas
@@ -17,6 +39,23 @@ export function todayStr() {
 // (ClientPicker.jsx), replicado acá para los rankings de productos.
 export function normalizeText(str) {
   return (str || '').toString().normalize('NFD').replace(/\p{Diacritic}/gu, '').trim().toLowerCase();
+}
+
+// Parsea la tabla pegada desde Word/Excel de una cotización (quotes.tabla_pegada,
+// guardada como JSON de un array de filas, cada fila un array de celdas de
+// texto). Devuelve siempre un array de arrays de string, nunca revienta con un
+// JSON corrupto o vacío.
+export function parseTablaPegada(raw) {
+  if (!raw) return [];
+  try {
+    const rows = JSON.parse(raw);
+    if (!Array.isArray(rows)) return [];
+    return rows
+      .filter(row => Array.isArray(row))
+      .map(row => row.map(cell => (cell === null || cell === undefined) ? '' : String(cell)));
+  } catch {
+    return [];
+  }
 }
 
 export async function paginate(query, params, page = 1, pageSize = 50) {

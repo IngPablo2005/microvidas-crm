@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import api from '../api/client.js';
 import { Card, Badge, Button, Modal, Field, inputCls, Loading, EmptyState, fmtPrecio, fmtDate } from '../components/UI.jsx';
 import ClientPicker from '../components/ClientPicker.jsx';
+import PasteTable from '../components/PasteTable.jsx';
 import { Plus, Download, Pencil, FileText, Trash2 } from 'lucide-react';
 
 const LOGO_SRC = '/branding/microvidas-logo.png';
@@ -229,6 +230,24 @@ export default function Quotes() {
                 </table>
               </div>
             )}
+            {detail.tabla_pegada?.length > 0 && (
+              <div>
+                <div className="text-xs font-semibold text-gray-600 mb-1">Información adicional</div>
+                <div className="overflow-x-auto rounded-md border border-gray-200">
+                  <table className="text-sm w-full">
+                    <tbody>
+                      {detail.tabla_pegada.map((row, i) => (
+                        <tr key={i} className="border-t border-gray-100 first:border-t-0">
+                          {row.map((cell, j) => (
+                            <td key={j} className="px-3 py-1.5 border-r border-gray-100 last:border-r-0 text-gray-600 align-top whitespace-pre-wrap">{cell}</td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
             <div className="flex flex-wrap gap-2 justify-end pt-2 border-t border-gray-100">
               <Button variant="secondary" onClick={() => window.open(`/api/quotes/${detail.id}/pdf`, '_blank')}><FileText size={13} className="inline mr-1" /> Descargar PDF</Button>
               <Button variant="secondary" onClick={() => setEditing(true)}><Pencil size={13} className="inline mr-1" /> Editar cotización</Button>
@@ -273,6 +292,9 @@ function QuoteFormModal({ clients, onOpenClientPicker, products, defaultClientId
   const [notasTabla, setNotasTabla] = useState(
     editingQuote?.notas_tabla ?? defaultNotasTabla ?? ''
   );
+  const [tablaPegada, setTablaPegada] = useState(
+    editingQuote?.tabla_pegada?.length ? editingQuote.tabla_pegada : null
+  );
   const [headers, setHeaders] = useState({ ...DEFAULT_ITEM_HEADERS, ...(editingQuote?.item_headers || {}) });
   const [items, setItems] = useState(
     editingQuote?.items?.length
@@ -310,7 +332,7 @@ function QuoteFormModal({ clients, onOpenClientPicker, products, defaultClientId
     if (saving) return; // evita doble envío si se hace doble clic
     setSaving(true);
     setSaveError('');
-    const payload = { fecha_vencimiento: fechaVencimiento, items, responsable, observaciones, condiciones_comerciales: condicionesComerciales, notas_tabla: notasTabla, item_headers: headers, usuario: 'Usuario' };
+    const payload = { fecha_vencimiento: fechaVencimiento, items, responsable, observaciones, condiciones_comerciales: condicionesComerciales, notas_tabla: notasTabla, item_headers: headers, tabla_pegada: tablaPegada, usuario: 'Usuario' };
     try {
       if (isEditing) {
         await api.put(`/quotes/${editingQuote.id}`, payload);
@@ -419,6 +441,9 @@ function QuoteFormModal({ clients, onOpenClientPicker, products, defaultClientId
             value={notasTabla} onChange={e => setNotasTabla(e.target.value)}
             placeholder="Una línea por fila, con formato Título: Detalle. Ej: Precio en Dólares + IVA: Sujeto a modificaciones sin previo aviso."
           />
+        </Field>
+        <Field label="Información adicional (pegar tabla de Word o Excel)">
+          <PasteTable value={tablaPegada} onChange={setTablaPegada} />
         </Field>
 
         {(anyCantidad || totalFinanciado > 0) && (

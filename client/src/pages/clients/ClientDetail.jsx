@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../api/client.js';
-import { Card, Badge, Button, Modal, Field, inputCls, Loading, EmptyState, fmtUSD, fmtDate } from '../../components/UI.jsx';
+import { Card, Badge, Button, Modal, Field, inputCls, Loading, EmptyState, fmtUSD, fmtDate, fmtDateTime } from '../../components/UI.jsx';
 import {
   StickyNote, CheckSquare, FileText, ShoppingCart, Award, Image as ImageIcon, CalendarPlus, Phone, Mail,
   MessageCircle, Users as UsersIcon, ArrowLeft, Trash2, Pencil, Sprout
@@ -205,7 +205,7 @@ function HistorialTab({ timeline }) {
             <div className="flex-1">
               <div className="flex items-center gap-2 text-xs text-gray-400">
                 <span className="font-medium text-gray-600">{e.tipo}</span>
-                <span>· {new Date(e.fecha).toLocaleString('es-AR')}</span>
+                <span>· {fmtDateTime(e.fecha)}</span>
                 {e.usuario && <span>· {e.usuario}</span>}
               </div>
               <div className="text-sm text-gray-700">{e.descripcion}</div>

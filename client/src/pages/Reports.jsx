@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import api from '../api/client.js';
-import { Card, Loading, Button, fmtUSD } from '../components/UI.jsx';
+import { Card, Loading, Button, fmtUSD, fmtDate } from '../components/UI.jsx';
 import { CATEGORICAL, INK } from '../colors.js';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
 import { FileDown, Phone, MapPin, FlaskConical, FileText, DollarSign, Wallet } from 'lucide-react';
@@ -41,7 +41,7 @@ function DailyDetailCard() {
           <div className="text-sm font-semibold text-gray-700">Tareas diarias de la semana</div>
           <div className="text-xs text-gray-400">
             Llamadas, visitas, ensayos, cotizaciones, ventas y cobranzas, con el detalle escrito tal cual se cargó
-            {detail ? ` — Lunes ${detail.lunes} a Viernes ${detail.viernes}` : ''}
+            {detail ? ` — Lunes ${fmtDate(detail.lunes)} a Viernes ${fmtDate(detail.viernes)}` : ''}
           </div>
         </div>
         <div className="flex gap-2">
@@ -64,7 +64,7 @@ function DailyDetailCard() {
             return (
               <div key={dia.fecha} className="border border-gray-100 rounded-md p-3 min-h-[120px]">
                 <div className="text-sm font-semibold text-gray-800">{dia.diaSemana}</div>
-                <div className="text-xs text-gray-400 mb-2">{dia.fecha}</div>
+                <div className="text-xs text-gray-400 mb-2">{fmtDate(dia.fecha)}</div>
                 {totalDia === 0 ? (
                   <p className="text-xs text-gray-400">Sin tareas registradas.</p>
                 ) : (

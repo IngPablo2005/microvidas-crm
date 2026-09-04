@@ -3,7 +3,7 @@ import PDFDocument from 'pdfkit';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import db from '../db.js';
-import { logActivity, genNumber } from '../helpers.js';
+import { logActivity, genNumber, fmtFechaAR, parseTablaPegada } from '../helpers.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LOGO_PATH = path.join(__dirname, '..', 'assets', 'microvidas-logo.png');
@@ -79,18 +79,19 @@ router.get('/:id', async (req, res) => {
   if (!quote) return res.status(404).json({ error: 'Cotización no encontrada' });
   const items = await db.prepare(`SELECT qi.*, p.logo_data_url as producto_logo FROM quote_items qi
     LEFT JOIN products p ON p.id = qi.product_id WHERE qi.quote_id = ?`).all(req.params.id);
-  res.json({ ...quote, item_headers: parseItemHeaders(quote.item_headers), items });
+  res.json({ ...quote, item_headers: parseItemHeaders(quote.item_headers), tabla_pegada: parseTablaPegada(quote.tabla_pegada), items });
 });
 
 router.post('/', async (req, res) => {
-  const { client_id, fecha, fecha_vencimiento, moneda, descuento_general, items, probabilidad_cierre, responsable, observaciones, condiciones_comerciales, notas_tabla, item_headers, usuario } = req.body;
+  const { client_id, fecha, fecha_vencimiento, moneda, descuento_general, items, probabilidad_cierre, responsable, observaciones, condiciones_comerciales, notas_tabla, item_headers, tabla_pegada, usuario } = req.body;
   const { computed, subtotal, total, totalFinanciado } = computeTotals(items || [], descuento_general);
   const numero = await genNumber('COT', 'quotes');
-  const id = (await db.prepare(`INSERT INTO quotes (numero, client_id, fecha, fecha_vencimiento, moneda, descuento_general, subtotal, total, total_financiado, probabilidad_cierre, estado, responsable, observaciones, condiciones_comerciales, notas_tabla, item_headers)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+  const id = (await db.prepare(`INSERT INTO quotes (numero, client_id, fecha, fecha_vencimiento, moneda, descuento_general, subtotal, total, total_financiado, probabilidad_cierre, estado, responsable, observaciones, condiciones_comerciales, notas_tabla, item_headers, tabla_pegada)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
     numero, client_id, fecha || new Date().toISOString().slice(0, 10), fecha_vencimiento, moneda || 'USD',
     descuento_general || 0, subtotal, total, totalFinanciado, probabilidad_cierre || 50, 'Borrador', responsable, observaciones,
-    condiciones_comerciales || null, notas_tabla || null, item_headers ? JSON.stringify(item_headers) : null
+    condiciones_comerciales || null, notas_tabla || null, item_headers ? JSON.stringify(item_headers) : null,
+    (tabla_pegada && Array.isArray(tabla_pegada) && tabla_pegada.length) ? JSON.stringify(tabla_pegada) : null
   )).lastInsertRowid;
   const insItem = db.prepare('INSERT INTO quote_items (quote_id, product_id, descripcion, cantidad, precio_unitario, descuento, financiado, importe) VALUES (?,?,?,?,?,?,?,?)');
   for (const it of computed) await insItem.run(id, it.product_id || null, it.descripcion, it.cantidad, it.precio_unitario, it.descuento || 0, it.financiado || 0, it.importe);
@@ -105,10 +106,17 @@ router.put('/:id', async (req, res) => {
   const quote = await db.prepare('SELECT * FROM quotes WHERE id = ?').get(req.params.id);
   if (!quote) return res.status(404).json({ error: 'Cotización no encontrada' });
 
-  const { fecha, fecha_vencimiento, moneda, descuento_general, items, probabilidad_cierre, responsable, observaciones, condiciones_comerciales, notas_tabla, item_headers, usuario } = req.body;
+  const { fecha, fecha_vencimiento, moneda, descuento_general, items, probabilidad_cierre, responsable, observaciones, condiciones_comerciales, notas_tabla, item_headers, tabla_pegada, usuario } = req.body;
   const { computed, subtotal, total, totalFinanciado } = computeTotals(items || [], descuento_general ?? quote.descuento_general);
 
-  await db.prepare(`UPDATE quotes SET fecha=?, fecha_vencimiento=?, moneda=?, descuento_general=?, subtotal=?, total=?, total_financiado=?, probabilidad_cierre=?, responsable=?, observaciones=?, condiciones_comerciales=?, notas_tabla=?, item_headers=?, updated_at=datetime('now') WHERE id=?`)
+  // tabla_pegada: undefined significa "no vino en el body" (conservar la anterior);
+  // null o [] explícito significa "se quitó la tabla" (el botón "Quitar tabla" del
+  // frontend manda null).
+  const tablaPegadaValue = tabla_pegada === undefined
+    ? quote.tabla_pegada
+    : ((Array.isArray(tabla_pegada) && tabla_pegada.length) ? JSON.stringify(tabla_pegada) : null);
+
+  await db.prepare(`UPDATE quotes SET fecha=?, fecha_vencimiento=?, moneda=?, descuento_general=?, subtotal=?, total=?, total_financiado=?, probabilidad_cierre=?, responsable=?, observaciones=?, condiciones_comerciales=?, notas_tabla=?, item_headers=?, tabla_pegada=?, updated_at=datetime('now') WHERE id=?`)
     .run(
       fecha || quote.fecha,
       fecha_vencimiento ?? quote.fecha_vencimiento,
@@ -121,6 +129,7 @@ router.put('/:id', async (req, res) => {
       condiciones_comerciales ?? quote.condiciones_comerciales,
       notas_tabla ?? quote.notas_tabla,
       item_headers ? JSON.stringify(item_headers) : quote.item_headers,
+      tablaPegadaValue,
       req.params.id
     );
   await db.prepare('DELETE FROM quote_items WHERE quote_id = ?').run(req.params.id);
@@ -192,6 +201,7 @@ router.get('/:id/pdf', async (req, res) => {
     LEFT JOIN products p ON p.id = qi.product_id WHERE qi.quote_id = ?`).all(req.params.id);
   const headers = parseItemHeaders(quote.item_headers);
   const notasTablaRows = parseNotasTabla(quote.notas_tabla);
+  const tablaPegadaRows = parseTablaPegada(quote.tabla_pegada);
   const moneda = quote.moneda || 'USD';
 
   const doc = new PDFDocument({ margin: 30, size: 'A4' });
@@ -210,7 +220,7 @@ router.get('/:id/pdf', async (req, res) => {
     doc.fontSize(8).fillColor(GREEN_LIGHT).font('Helvetica').text('AGROBIOTECNOLOGÍA', left, 52);
   }
   doc.fontSize(20).fillColor(GREEN).font('Helvetica-Bold').text('Cotización', left, 30, { align: 'right', width: right - left });
-  doc.fontSize(9).fillColor('#6b7280').font('Helvetica').text(new Date(quote.fecha).toLocaleDateString('es-AR'), left, 56, { align: 'right', width: right - left });
+  doc.fontSize(9).fillColor('#6b7280').font('Helvetica').text(fmtFechaAR(quote.fecha), left, 56, { align: 'right', width: right - left });
 
   doc.moveTo(left, 78).lineTo(right, 78).strokeColor('#d1d5db').stroke();
 
@@ -225,7 +235,7 @@ router.get('/:id/pdf', async (req, res) => {
   doc.fontSize(9).fillColor('#374151').font('Helvetica-Bold').text('N°:', left, y);
   doc.font('Helvetica').text(quote.numero, left + 25, y);
   doc.font('Helvetica-Bold').text('Validez:', left + 150, y);
-  doc.font('Helvetica').text(quote.fecha_vencimiento ? new Date(quote.fecha_vencimiento).toLocaleDateString('es-AR') : 'A convenir', left + 195, y);
+  doc.font('Helvetica').text(quote.fecha_vencimiento ? fmtFechaAR(quote.fecha_vencimiento) : 'A convenir', left + 195, y);
   doc.font('Helvetica-Bold').text('Vendedor:', left + 330, y);
   doc.font('Helvetica').text(quote.responsable || '—', left + 385, y);
   y += 24;
@@ -346,6 +356,31 @@ router.get('/:id/pdf', async (req, res) => {
       doc.moveTo(left + labelW, y).lineTo(left + labelW, y + rowH).strokeColor('#d1d5db').stroke();
       doc.font('Helvetica-Bold').fillColor('#111827').fontSize(8.5).text(row.label, left + 6, y + 5, { width: labelW - 12 });
       doc.font('Helvetica').fillColor('#374151').fontSize(8.5).text(row.detalle, left + labelW + 6, y + 5, { width: detailW - 12 });
+      y += rowH;
+    }
+    y += 10;
+  }
+
+  // Tabla pegada desde Word/Excel (Ctrl+V) — grilla genérica de filas/columnas
+  // de texto (sin fórmulas ni formato, sólo el contenido de cada celda),
+  // dibujada como una tabla simple debajo del cuadro de notas.
+  if (tablaPegadaRows.length) {
+    const numCols = Math.max(...tablaPegadaRows.map(r => r.length));
+    const colW = tableWidth / numCols;
+    y += 6;
+    doc.fontSize(9).fillColor(GREEN).font('Helvetica-Bold').text('Información adicional', left, y);
+    y += 14;
+    for (const row of tablaPegadaRows) {
+      doc.font('Helvetica').fontSize(8);
+      const cellHeights = Array.from({ length: numCols }, (_, i) => doc.heightOfString(row[i] || '', { width: colW - 10 }));
+      const rowH = Math.max(18, Math.max(...cellHeights) + 8);
+      if (y + rowH > doc.page.height - 90) { doc.addPage(); y = 40; }
+      let x = left;
+      for (let i = 0; i < numCols; i++) {
+        doc.rect(x, y, colW, rowH).strokeColor('#d1d5db').lineWidth(0.5).stroke();
+        doc.fillColor('#374151').text(row[i] || '', x + 5, y + 4, { width: colW - 10 });
+        x += colW;
+      }
       y += rowH;
     }
     y += 10;

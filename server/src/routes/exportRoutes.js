@@ -5,6 +5,7 @@ import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } fro
 import db from '../db.js';
 import { getWeeklySummary } from '../lib/weeklySummary.js';
 import { getWeeklyDailyDetail } from '../lib/weeklyDailyDetail.js';
+import { fmtFechaAR } from '../helpers.js';
 
 const router = express.Router();
 
@@ -17,7 +18,7 @@ function renderWeeklyReportPDF(res, summary) {
   doc.pipe(res);
 
   doc.fontSize(17).fillColor('#0f172a').text('Reporte semanal comercial', { align: 'center' });
-  doc.fontSize(10).fillColor('#6b7280').text(`Período: ${summary.desde} al ${summary.hasta}`, { align: 'center' });
+  doc.fontSize(10).fillColor('#6b7280').text(`Período: ${fmtFechaAR(summary.desde)} al ${fmtFechaAR(summary.hasta)}`, { align: 'center' });
   doc.moveDown(1.2);
 
   const cards = [
@@ -64,7 +65,7 @@ function renderWeeklyReportPDF(res, summary) {
 
   doc.y = y + 16;
   doc.x = 36;
-  doc.fontSize(7).fillColor('#9ca3af').text(`Generado el ${new Date().toISOString().slice(0, 10)}`);
+  doc.fontSize(7).fillColor('#9ca3af').text(`Generado el ${fmtFechaAR(new Date())}`);
   doc.end();
 }
 
@@ -74,7 +75,7 @@ async function renderWeeklyReportXLSX(res, summary) {
 
   ws.addRow(['Reporte semanal comercial']);
   ws.getRow(1).font = { bold: true, size: 14 };
-  ws.addRow([`Período: ${summary.desde} al ${summary.hasta}`]);
+  ws.addRow([`Período: ${fmtFechaAR(summary.desde)} al ${fmtFechaAR(summary.hasta)}`]);
   ws.addRow([]);
   ws.addRow(['Visitas realizadas', summary.totales.visitas]);
   ws.addRow(['Llamadas realizadas', summary.totales.llamadas]);
@@ -136,12 +137,12 @@ function renderDailyDetailPDF(res, detail) {
   doc.pipe(res);
 
   doc.fontSize(17).fillColor('#0f172a').text('Tareas diarias realizadas en la semana', { align: 'center' });
-  doc.fontSize(10).fillColor('#6b7280').text(`Semana del ${detail.lunes} al ${detail.viernes}`, { align: 'center' });
+  doc.fontSize(10).fillColor('#6b7280').text(`Semana del ${fmtFechaAR(detail.lunes)} al ${fmtFechaAR(detail.viernes)}`, { align: 'center' });
   doc.moveDown(1);
 
   for (const dia of detail.dias) {
     if (doc.y > doc.page.height - 100) doc.addPage();
-    doc.fontSize(13).fillColor('#0f172a').text(`${dia.diaSemana} — ${dia.fecha}`);
+    doc.fontSize(13).fillColor('#0f172a').text(`${dia.diaSemana} — ${fmtFechaAR(dia.fecha)}`);
     doc.moveTo(36, doc.y + 2).lineTo(doc.page.width - 36, doc.y + 2).strokeColor('#d1d5db').stroke();
     doc.moveDown(0.4);
 
@@ -166,7 +167,7 @@ function renderDailyDetailPDF(res, detail) {
     doc.moveDown(0.6);
   }
 
-  doc.fontSize(7).fillColor('#9ca3af').text(`Generado el ${new Date().toISOString().slice(0, 10)}`);
+  doc.fontSize(7).fillColor('#9ca3af').text(`Generado el ${fmtFechaAR(new Date())}`);
   doc.end();
 }
 
@@ -176,7 +177,7 @@ async function renderDailyDetailXLSX(res, detail) {
 
   ws.addRow(['Tareas diarias realizadas en la semana']);
   ws.getRow(1).font = { bold: true, size: 14 };
-  ws.addRow([`Semana del ${detail.lunes} al ${detail.viernes}`]);
+  ws.addRow([`Semana del ${fmtFechaAR(detail.lunes)} al ${fmtFechaAR(detail.viernes)}`]);
   ws.addRow([]);
 
   const headerRowIdx = ws.rowCount + 1;
@@ -204,10 +205,10 @@ async function renderDailyDetailXLSX(res, detail) {
           detalle = item.descripcion && item.descripcion.trim() ? item.descripcion : '(sin detalle escrito)';
           responsable = '';
         }
-        ws.addRow([dia.diaSemana, dia.fecha, cat.label, cliente, detalle, responsable || '']);
+        ws.addRow([dia.diaSemana, fmtFechaAR(dia.fecha), cat.label, cliente, detalle, responsable || '']);
       }
     }
-    if (!algo) ws.addRow([dia.diaSemana, dia.fecha, '—', '', 'Sin tareas registradas este día.', '']);
+    if (!algo) ws.addRow([dia.diaSemana, fmtFechaAR(dia.fecha), '—', '', 'Sin tareas registradas este día.', '']);
   }
   ws.columns.forEach((col, i) => { col.width = [10, 12, 12, 26, 55, 20][i] || 20; });
 
@@ -220,12 +221,12 @@ async function renderDailyDetailXLSX(res, detail) {
 async function renderDailyDetailDOCX(res, detail) {
   const children = [
     new Paragraph({ text: 'Tareas diarias realizadas en la semana', heading: HeadingLevel.HEADING_1, alignment: AlignmentType.CENTER }),
-    new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `Semana del ${detail.lunes} al ${detail.viernes}`, color: '6b7280', size: 20 })] }),
+    new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `Semana del ${fmtFechaAR(detail.lunes)} al ${fmtFechaAR(detail.viernes)}`, color: '6b7280', size: 20 })] }),
     new Paragraph({ text: '' }),
   ];
 
   for (const dia of detail.dias) {
-    children.push(new Paragraph({ text: `${dia.diaSemana} — ${dia.fecha}`, heading: HeadingLevel.HEADING_2 }));
+    children.push(new Paragraph({ text: `${dia.diaSemana} — ${fmtFechaAR(dia.fecha)}`, heading: HeadingLevel.HEADING_2 }));
 
     const totalItems = CATEGORIAS_DETALLE.reduce((s, c) => s + dia[c.key].length, 0);
     if (totalItems === 0) {
@@ -243,7 +244,7 @@ async function renderDailyDetailDOCX(res, detail) {
     children.push(new Paragraph({ text: '' }));
   }
 
-  children.push(new Paragraph({ children: [new TextRun({ text: `Generado el ${new Date().toISOString().slice(0, 10)}`, size: 16, color: '9ca3af' })] }));
+  children.push(new Paragraph({ children: [new TextRun({ text: `Generado el ${fmtFechaAR(new Date())}`, size: 16, color: '9ca3af' })] }));
 
   const doc = new Document({ sections: [{ children }] });
   const buffer = await Packer.toBuffer(doc);

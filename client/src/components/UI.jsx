@@ -92,7 +92,35 @@ export function fmtPrecio(n) {
   return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(n || 0);
 }
 
+function pad2(n) {
+  return String(n).padStart(2, '0');
+}
+
+// Formatea una fecha como dd/mm/aaaa (con ceros a la izquierda). Si el valor es
+// una fecha "sola" sin hora (ej. "2026-09-04" — así se guardan fecha de
+// cotización, venta, tarea, cobranza, etc.), se arma el string directamente en
+// vez de pasar por new Date(): convertir "2026-09-04" a un objeto Date lo
+// interpreta como medianoche UTC, y en husos horarios negativos como el de
+// Argentina (UTC-3) eso mostraba un día antes del real (ej. "3/9/2026" en vez
+// de "4/9/2026"). Para valores con hora (timestamps), sigue usando los
+// getters locales de Date, sólo que ahora con ceros a la izquierda.
 export function fmtDate(d) {
   if (!d) return '—';
-  try { return new Date(d).toLocaleDateString('es-AR'); } catch (e) { return d; }
+  const soloFecha = typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d);
+  if (soloFecha) {
+    const [y, m, day] = d.split('-');
+    return `${day}/${m}/${y}`;
+  }
+  const date = new Date(d);
+  if (isNaN(date.getTime())) return d;
+  return `${pad2(date.getDate())}/${pad2(date.getMonth() + 1)}/${date.getFullYear()}`;
+}
+
+// Igual que fmtDate, agregando hora:minuto — para registros que sí guardan
+// hora (ej. el timeline de actividades de un cliente).
+export function fmtDateTime(d) {
+  if (!d) return '—';
+  const date = new Date(d);
+  if (isNaN(date.getTime())) return d;
+  return `${fmtDate(d)} ${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
 }

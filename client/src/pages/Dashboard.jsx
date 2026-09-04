@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/client.js';
-import { KpiCard, Card, Badge, fmtUSD, Loading, Button, Field, inputCls } from '../components/UI.jsx';
+import { KpiCard, Card, Badge, fmtUSD, fmtDateTime, Loading, Button, Field, inputCls } from '../components/UI.jsx';
 import ClientPicker from '../components/ClientPicker.jsx';
 import { CATEGORICAL, STATUS } from '../colors.js';
 import {
@@ -216,7 +216,7 @@ function VisitasLlamadasCard() {
                   {r.tipo === 'Visita' ? <MapPin size={14} className="text-emerald-500 mt-0.5" /> : r.tipo === 'Ensayo' ? <FlaskConical size={14} className="text-purple-500 mt-0.5" /> : <Phone size={14} className="text-blue-500 mt-0.5" />}
                   <div className="flex-1 min-w-0">
                     <div className="text-sm text-gray-800">{r.cliente_nombre}</div>
-                    <div className="text-xs text-gray-400">{r.tipo} · {new Date(r.fecha).toLocaleString('es-AR')}</div>
+                    <div className="text-xs text-gray-400">{r.tipo} · {fmtDateTime(r.fecha)}</div>
                     {r.descripcion && <div className="text-xs text-gray-500 mt-0.5">{r.descripcion}</div>}
                   </div>
                 </div>
