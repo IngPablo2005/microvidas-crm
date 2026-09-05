@@ -58,6 +58,39 @@ router.get('/ranking-clientes', async (req, res) => {
   res.json(rows);
 });
 
+// Ranking de facturación por vendedor. El campo `vendedor` de Ventas es un
+// texto libre (no un selector de usuarios), así que el mismo vendedor puede
+// quedar tipeado distinto entre una venta y otra (mayúsculas, acentos,
+// espacios de más) — mismo problema ya resuelto para el ranking de productos
+// (ver `rankingProductos` más abajo). Se agrupa por texto normalizado para no
+// repetir al mismo vendedor como filas separadas, mostrando como etiqueta la
+// variante de texto más repetida dentro de ese grupo.
+router.get('/ranking-vendedores', async (req, res) => {
+  const rows = await db.prepare(`SELECT vendedor, total FROM sales`).all();
+
+  const groups = new Map();
+  for (const r of rows) {
+    const nombre = (r.vendedor || '').trim();
+    const key = nombre ? normalizeText(nombre) : '(sin vendedor)';
+    if (!groups.has(key)) {
+      groups.set(key, { total: 0, operaciones: 0, labelCounts: new Map() });
+    }
+    const g = groups.get(key);
+    g.total += Number(r.total) || 0;
+    g.operaciones += 1;
+    const label = nombre || 'Sin vendedor asignado';
+    g.labelCounts.set(label, (g.labelCounts.get(label) || 0) + 1);
+  }
+
+  const result = [...groups.values()].map(g => {
+    let best = null, bestCount = -1;
+    for (const [txt, count] of g.labelCounts) { if (count > bestCount) { best = txt; bestCount = count; } }
+    return { vendedor: best, total: g.total, operaciones: g.operaciones };
+  });
+  result.sort((a, b) => b.total - a.total);
+  res.json(result);
+});
+
 // Agrupa las líneas de venta por producto real, no por el texto tal cual quedó
 // tipeado en cada venta. Antes se agrupaba directo por `si.descripcion`, así que
 // un mismo producto vendido con mayúsculas/acentos/tipeo distinto en cada venta

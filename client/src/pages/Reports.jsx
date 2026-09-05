@@ -121,16 +121,17 @@ export default function Reports() {
 
   useEffect(() => {
     (async () => {
-      const [weekly, monthly, yearly, pipeline, conversion, rankClients, rankProducts, rankProductsUnidades, colWeekly, colMonthly, colClient, colVendor, colMethod, debt] = await Promise.all([
+      const [weekly, monthly, yearly, pipeline, conversion, rankClients, rankVendors, rankProducts, rankProductsUnidades, colWeekly, colMonthly, colClient, colVendor, colMethod, debt] = await Promise.all([
         api.get('/reports/sales-weekly'), api.get('/reports/sales-monthly'), api.get('/reports/sales-yearly'),
         api.get('/reports/pipeline-evolution'), api.get('/reports/conversion'), api.get('/reports/ranking-clientes'),
+        api.get('/reports/ranking-vendedores'),
         api.get('/reports/ranking-productos'), api.get('/reports/ranking-productos-unidades'), api.get('/reports/collections-weekly'), api.get('/reports/collections-monthly'),
         api.get('/reports/collections-by-client'), api.get('/reports/collections-by-vendor'), api.get('/reports/collections-by-method'),
         api.get('/reports/debt-evolution'),
       ]);
       setData({
         weekly: weekly.data, monthly: monthly.data, yearly: yearly.data, pipeline: pipeline.data, conversion: conversion.data,
-        rankClients: rankClients.data, rankProducts: rankProducts.data, rankProductsUnidades: rankProductsUnidades.data,
+        rankClients: rankClients.data, rankVendors: rankVendors.data, rankProducts: rankProducts.data, rankProductsUnidades: rankProductsUnidades.data,
         colWeekly: colWeekly.data, colMonthly: colMonthly.data,
         colClient: colClient.data, colVendor: colVendor.data, colMethod: colMethod.data, debt: debt.data,
       });
@@ -201,11 +202,17 @@ export default function Reports() {
         </ChartCard>
       </div>
 
-      <div className="grid md:grid-cols-3 gap-4">
+      <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
         <ChartCard title="Ranking de clientes (por facturación)" height={300}>
           <ResponsiveContainer><BarChart data={data.rankClients} layout="vertical" margin={{ left: 20 }}>
             <CartesianGrid horizontal={false} stroke={INK.grid} /><XAxis type="number" tick={axisStyle} /><YAxis type="category" dataKey="razon_social" tick={{ ...axisStyle, fontSize: 10 }} width={140} />
             <Tooltip contentStyle={tooltipStyle} formatter={v => fmtUSD(v)} /><Bar dataKey="total" fill={BLUE} radius={[0, 4, 4, 0]} maxBarSize={BAR_SIZE} />
+          </BarChart></ResponsiveContainer>
+        </ChartCard>
+        <ChartCard title="Ranking de vendedores (por facturación)" height={300}>
+          <ResponsiveContainer><BarChart data={data.rankVendors} layout="vertical" margin={{ left: 20 }}>
+            <CartesianGrid horizontal={false} stroke={INK.grid} /><XAxis type="number" tick={axisStyle} /><YAxis type="category" dataKey="vendedor" tick={{ ...axisStyle, fontSize: 10 }} width={140} />
+            <Tooltip contentStyle={tooltipStyle} formatter={v => fmtUSD(v)} /><Bar dataKey="total" fill={CATEGORICAL[5]} radius={[0, 4, 4, 0]} maxBarSize={BAR_SIZE} />
           </BarChart></ResponsiveContainer>
         </ChartCard>
         <ChartCard title="Ranking de productos (por volumen de ventas)" height={300}>
