@@ -14,7 +14,7 @@ const router = express.Router();
 // sobrescribir por cotización (quotes.item_headers, guardado como JSON) para
 // soportar el pedido de "poder editar títulos y celdas".
 const DEFAULT_ITEM_HEADERS = {
-  producto: 'Producto', cantidad: 'Cantidad', precio_lista: 'Precio lista',
+  producto: 'Producto', cantidad: 'Cantidad', presentacion: 'Presentación', precio_lista: 'Precio lista',
   descuento: 'Desc. (%)', precio_desc: 'Precio c/desc', financiado: 'Financiado', subtotal: 'Subtotal',
 };
 
@@ -94,8 +94,8 @@ router.post('/', async (req, res) => {
     (tabla_pegada && Array.isArray(tabla_pegada) && tabla_pegada.length) ? JSON.stringify(tabla_pegada) : null,
     (imagenes_pegadas && Array.isArray(imagenes_pegadas) && imagenes_pegadas.length) ? JSON.stringify(imagenes_pegadas) : null
   )).lastInsertRowid;
-  const insItem = db.prepare('INSERT INTO quote_items (quote_id, product_id, descripcion, cantidad, precio_unitario, descuento, financiado, importe) VALUES (?,?,?,?,?,?,?,?)');
-  for (const it of computed) await insItem.run(id, it.product_id || null, it.descripcion, it.cantidad, it.precio_unitario, it.descuento || 0, it.financiado || 0, it.importe);
+  const insItem = db.prepare('INSERT INTO quote_items (quote_id, product_id, descripcion, cantidad, precio_unitario, descuento, financiado, importe, presentacion, composicion) VALUES (?,?,?,?,?,?,?,?,?,?)');
+  for (const it of computed) await insItem.run(id, it.product_id || null, it.descripcion, it.cantidad, it.precio_unitario, it.descuento || 0, it.financiado || 0, it.importe, it.presentacion || null, it.composicion || null);
   await logActivity(client_id, 'Cotizacion', `Cotización ${numero} creada por ${moneda || 'USD'} ${total.toFixed(2)}.`, usuario, 'quotes', id);
   res.status(201).json({ id, numero });
 });
@@ -138,8 +138,8 @@ router.put('/:id', async (req, res) => {
       req.params.id
     );
   await db.prepare('DELETE FROM quote_items WHERE quote_id = ?').run(req.params.id);
-  const insItem = db.prepare('INSERT INTO quote_items (quote_id, product_id, descripcion, cantidad, precio_unitario, descuento, financiado, importe) VALUES (?,?,?,?,?,?,?,?)');
-  for (const it of computed) await insItem.run(req.params.id, it.product_id || null, it.descripcion, it.cantidad, it.precio_unitario, it.descuento || 0, it.financiado || 0, it.importe);
+  const insItem = db.prepare('INSERT INTO quote_items (quote_id, product_id, descripcion, cantidad, precio_unitario, descuento, financiado, importe, presentacion, composicion) VALUES (?,?,?,?,?,?,?,?,?,?)');
+  for (const it of computed) await insItem.run(req.params.id, it.product_id || null, it.descripcion, it.cantidad, it.precio_unitario, it.descuento || 0, it.financiado || 0, it.importe, it.presentacion || null, it.composicion || null);
   await logActivity(quote.client_id, 'Cotizacion', `Cotización ${quote.numero} editada. Nuevo total: ${moneda || quote.moneda} ${total.toFixed(2)}.`, usuario, 'quotes', quote.id);
   res.json({ ok: true, subtotal, total });
 });
@@ -247,13 +247,21 @@ router.get('/:id/pdf', async (req, res) => {
   y += 24;
 
   // Tabla de productos — Producto | Cantidad | Precio lista | Precio c/desc | Financiado | Subtotal
+  // Anchos elegidos midiendo con doc.widthOfString() el texto más largo esperado
+  // en cada columna (títulos por defecto en mayúsculas + valores típicos, ej.
+  // "USD 12.345,67" o "PRESENTACIÓN") — pdfkit no trunca con "..." de forma
+  // confiable cuando el texto no entra ni en una línea (lineBreak:false igual
+  // lo pasa a una segunda línea en vez de recortarlo), así que la única forma
+  // segura de evitar que un título se corte es que la columna sea ancha de
+  // entrada. Suman 525pt, dentro del ancho útil de la página (A4 - 2×30 de margen ≈ 535pt).
   const cols = [
-    { key: 'producto', w: 150, align: 'left' },
-    { key: 'cantidad', w: 55, align: 'right' },
-    { key: 'precio_lista', w: 75, align: 'right' },
-    { key: 'precio_desc', w: 75, align: 'right' },
-    { key: 'financiado', w: 75, align: 'right' },
-    { key: 'subtotal', w: 95, align: 'right' },
+    { key: 'producto', w: 104, align: 'left' },
+    { key: 'cantidad', w: 50, align: 'right' },
+    { key: 'presentacion', w: 70, align: 'left' },
+    { key: 'precio_lista', w: 72, align: 'right' },
+    { key: 'precio_desc', w: 72, align: 'right' },
+    { key: 'financiado', w: 72, align: 'right' },
+    { key: 'subtotal', w: 85, align: 'right' },
   ];
   const tableWidth = cols.reduce((s, c) => s + c.w, 0);
 
@@ -277,41 +285,67 @@ router.get('/:id/pdf', async (req, res) => {
   // 0 sólo porque todas las líneas están anotadas sin comprometer un monto — en
   // ese caso no tiene sentido mostrar "TOTAL: USD 0,00", así que se omite más abajo.
   const hasAnyCantidad = items.some(it => it.cantidad !== null && it.cantidad !== undefined);
+  const LOGO_H = 26; // alto fijo del logo dentro de la celda "Producto" (antes: rowH-8 con rowH=34)
   for (const it of items) {
     if (y > doc.page.height - 160) { doc.addPage(); y = 40; y = drawHeaderRow(y); }
     const sinCantidad = it.cantidad === null || it.cantidad === undefined;
     const precioDesc = Number(it.precio_unitario) * (1 - (Number(it.descuento) || 0) / 100);
     const logoBuf = dataUrlToBuffer(it.producto_logo);
-    // Con logo cargado, la celda "Producto" muestra sólo el logo (sin el nombre al
-    // lado) para que se pueda dibujar bien grande y sea notable; sin logo, se
-    // muestra el nombre como antes. La fila se agranda cuando hay logo para que
-    // no quede aplastado contra el alto de una fila de sólo texto.
-    const rowH = logoBuf ? 34 : 22;
+    const descripcionTexto = it.descripcion || '';
+    const presentacionTexto = it.presentacion || '—';
+    const composicionTexto = (it.composicion || '').trim();
+
+    // Alto de fila calculado a partir del contenido real (nombre de producto
+    // largo, presentación larga, o la línea chica de composición debajo del
+    // producto), no un valor fijo — así ninguna columna se corta ni se
+    // superpone con la fila siguiente cuando el texto no entra en una sola
+    // línea. Con logo cargado, la celda "Producto" muestra sólo el logo (sin
+    // el nombre al lado) para que se vea grande; sin logo, se muestra el
+    // nombre. Si el catálogo tiene composición cargada, se agrega una línea
+    // chica y gris debajo (del nombre o del logo) con ese detalle.
+    doc.font('Helvetica').fontSize(9);
+    const descHeight = logoBuf ? LOGO_H : doc.heightOfString(descripcionTexto, { width: cols[0].w - 8 });
+    const presentacionHeight = doc.heightOfString(presentacionTexto, { width: cols[2].w - 8 });
+    doc.fontSize(7);
+    const composicionHeight = composicionTexto ? doc.heightOfString(composicionTexto, { width: cols[0].w - 8 }) : 0;
+    doc.fontSize(9);
+
+    const productoColHeight = descHeight + (composicionTexto ? composicionHeight + 2 : 0);
+    const rowH = Math.max(22, productoColHeight + 8, presentacionHeight + 8);
+
     const vals = [
-      logoBuf ? '' : (it.descripcion || ''),
+      logoBuf ? '' : descripcionTexto,
       sinCantidad ? '—' : Number(it.cantidad).toLocaleString('es-AR'),
+      presentacionTexto,
       fmtMoney(it.precio_unitario, moneda),
       fmtMoney(precioDesc, moneda),
       it.financiado ? fmtMoney(it.financiado, moneda) : '—',
       sinCantidad ? '—' : fmtMoney(it.importe, moneda),
     ];
     let x = left;
-    doc.fillColor('#1f2937');
-    const textY = y + (rowH - 9) / 2;
     vals.forEach((v, i) => {
-      if (i === 0 && logoBuf) {
-        try {
-          doc.image(logoBuf, x + 4, y + 4, { fit: [cols[i].w - 8, rowH - 8] });
-          x += cols[i].w;
-          return;
-        } catch {
-          // si el logo no se puede decodificar, se dibuja el nombre en su lugar
-          doc.text(String(it.descripcion || ''), x + 4, textY, { width: cols[i].w - 8, align: cols[i].align });
-          x += cols[i].w;
-          return;
+      const cellX = x + 4;
+      if (i === 0) {
+        doc.font('Helvetica').fontSize(9).fillColor('#1f2937');
+        if (logoBuf) {
+          try {
+            doc.image(logoBuf, cellX, y + 4, { fit: [cols[i].w - 8, LOGO_H] });
+          } catch {
+            // si el logo no se puede decodificar, se dibuja el nombre en su lugar
+            doc.text(descripcionTexto, cellX, y + 4, { width: cols[i].w - 8 });
+          }
+        } else {
+          doc.text(descripcionTexto, cellX, y + 4, { width: cols[i].w - 8 });
         }
+        if (composicionTexto) {
+          doc.font('Helvetica-Oblique').fontSize(7).fillColor('#9ca3af')
+            .text(composicionTexto, cellX, y + 4 + descHeight + 2, { width: cols[i].w - 8 });
+        }
+        x += cols[i].w;
+        return;
       }
-      doc.text(String(v), x + 4, textY, { width: cols[i].w - 8, align: cols[i].align });
+      doc.font('Helvetica').fontSize(9).fillColor('#1f2937');
+      doc.text(String(v), cellX, y + 4, { width: cols[i].w - 8, align: cols[i].align });
       x += cols[i].w;
     });
     doc.moveTo(left, y + rowH).lineTo(left + tableWidth, y + rowH).strokeColor('#e5e7eb').stroke();

@@ -15,7 +15,7 @@ const MAX_ITEMS = 5;
 // Títulos por defecto de la tabla de productos del cotizador — se pueden editar
 // por cotización (queda guardado junto con esa cotización) y viajan tal cual al PDF.
 const DEFAULT_ITEM_HEADERS = {
-  producto: 'Producto', cantidad: 'Cantidad', precio_lista: 'Precio lista',
+  producto: 'Producto', cantidad: 'Cantidad', presentacion: 'Presentación', precio_lista: 'Precio lista',
   descuento: 'Desc. (%)', precio_desc: 'Precio c/desc', financiado: 'Financiado', subtotal: 'Subtotal',
 };
 
@@ -166,7 +166,7 @@ export default function Quotes() {
       )}
 
       {detail && !editing && (
-        <Modal open onClose={() => setDetail(null)} title={`Cotización ${detail.numero}`} width="max-w-2xl">
+        <Modal open onClose={() => setDetail(null)} title={`Cotización ${detail.numero}`} width="max-w-3xl">
           <div className="space-y-3">
             <div className="flex justify-between items-start">
               <div>
@@ -180,10 +180,11 @@ export default function Quotes() {
               <thead className="text-xs text-gray-400 uppercase">
                 <tr>
                   <th className="text-left py-1">{detail.item_headers?.producto || 'Producto'}</th>
-                  <th className="text-right py-1">Cant.</th>
-                  <th className="text-right py-1">{detail.item_headers?.precio_lista || 'Precio lista'}</th>
-                  <th className="text-right py-1">{detail.item_headers?.financiado || 'Financiado'}</th>
-                  <th className="text-right py-1">{detail.item_headers?.subtotal || 'Subtotal'}</th>
+                  <th className="text-right py-1 pr-3">Cant.</th>
+                  <th className="text-left py-1 pr-3">{detail.item_headers?.presentacion || 'Presentación'}</th>
+                  <th className="text-right py-1 pl-3 pr-3">{detail.item_headers?.precio_lista || 'Precio lista'}</th>
+                  <th className="text-right py-1 pl-3 pr-3">{detail.item_headers?.financiado || 'Financiado'}</th>
+                  <th className="text-right py-1 pl-3">{detail.item_headers?.subtotal || 'Subtotal'}</th>
                 </tr>
               </thead>
               <tbody>
@@ -197,11 +198,13 @@ export default function Quotes() {
                       ) : (
                         <span>{it.descripcion}</span>
                       )}
+                      {it.composicion && <div className="text-[11px] text-gray-400 leading-tight mt-0.5">{it.composicion}</div>}
                     </td>
-                    <td className="py-1.5 text-right">{cantidadVacia(it.cantidad) ? '—' : it.cantidad}</td>
-                    <td className="py-1.5 text-right">{fmtPrecio(it.precio_unitario)}{it.descuento ? ` (-${it.descuento}%)` : ''}</td>
-                    <td className="py-1.5 text-right">{it.financiado ? fmtPrecio(it.financiado) : '—'}</td>
-                    <td className="py-1.5 text-right">{cantidadVacia(it.cantidad) ? '—' : fmtPrecio(it.importe)}</td>
+                    <td className="py-1.5 text-right pr-3">{cantidadVacia(it.cantidad) ? '—' : it.cantidad}</td>
+                    <td className="py-1.5 pr-3">{it.presentacion || '—'}</td>
+                    <td className="py-1.5 text-right pl-3 pr-3">{fmtPrecio(it.precio_unitario)}{it.descuento ? ` (-${it.descuento}%)` : ''}</td>
+                    <td className="py-1.5 text-right pl-3 pr-3">{it.financiado ? fmtPrecio(it.financiado) : '—'}</td>
+                    <td className="py-1.5 text-right pl-3">{cantidadVacia(it.cantidad) ? '—' : fmtPrecio(it.importe)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -290,7 +293,7 @@ export default function Quotes() {
 
 // La cantidad arranca vacía (no en 1): es opcional, y el monto de la línea sólo
 // se calcula/muestra si se anota una cantidad.
-function emptyItem() { return { product_id: '', descripcion: '', cantidad: '', precio_unitario: 0, descuento: 0, financiado: 0 }; }
+function emptyItem() { return { product_id: '', descripcion: '', cantidad: '', precio_unitario: 0, descuento: 0, financiado: 0, presentacion: '', composicion: '' }; }
 
 function QuoteFormModal({ clients, onOpenClientPicker, products, defaultClientId, defaultCondiciones, defaultNotasTabla, editingQuote, onClose, onSaved }) {
   const isEditing = !!editingQuote;
@@ -313,7 +316,7 @@ function QuoteFormModal({ clients, onOpenClientPicker, products, defaultClientId
   const [headers, setHeaders] = useState({ ...DEFAULT_ITEM_HEADERS, ...(editingQuote?.item_headers || {}) });
   const [items, setItems] = useState(
     editingQuote?.items?.length
-      ? editingQuote.items.map(it => ({ product_id: it.product_id || '', descripcion: it.descripcion, cantidad: it.cantidad ?? '', precio_unitario: it.precio_unitario, descuento: it.descuento || 0, financiado: it.financiado || 0 }))
+      ? editingQuote.items.map(it => ({ product_id: it.product_id || '', descripcion: it.descripcion, cantidad: it.cantidad ?? '', precio_unitario: it.precio_unitario, descuento: it.descuento || 0, financiado: it.financiado || 0, presentacion: it.presentacion || '', composicion: it.composicion || '' }))
       : [emptyItem()]
   );
   // Antes, si la creación fallaba en el servidor (ej. el bug del número de
@@ -331,7 +334,7 @@ function QuoteFormModal({ clients, onOpenClientPicker, products, defaultClientId
   function removeItem(i) { setItems(prev => prev.filter((_, idx) => idx !== i)); }
   function selectProduct(i, productId) {
     const prod = products.find(p => String(p.id) === productId);
-    updateItem(i, { product_id: productId, descripcion: prod?.nombre || '', precio_unitario: prod?.precio_unitario || 0 });
+    updateItem(i, { product_id: productId, descripcion: prod?.nombre || '', precio_unitario: prod?.precio_unitario || 0, presentacion: prod?.presentacion || '', composicion: prod?.composicion || '' });
   }
 
   const total = items.reduce((s, it) => s + (cantidadVacia(it.cantidad) ? 0 : Number(it.cantidad) * Number(it.precio_unitario) * (1 - (Number(it.descuento) || 0) / 100)), 0);
@@ -390,11 +393,12 @@ function QuoteFormModal({ clients, onOpenClientPicker, products, defaultClientId
             Productos (hasta {MAX_ITEMS}) — elegí uno de la lista precargada o escribí uno libre; los títulos de columna también se pueden editar.
           </div>
           <div className="overflow-x-auto rounded-md border border-gray-200">
-            <table className="w-full text-sm min-w-[900px]">
+            <table className="w-full text-sm min-w-[1060px]">
               <thead style={{ backgroundColor: '#1e5f3c' }}>
                 <tr>
                   <th className="text-left px-2 py-1.5 w-[230px]"><input className={headerInputCls} value={headers.producto} onChange={e => updateHeader('producto', e.target.value)} /></th>
-                  <th className="text-right px-2 py-1.5 w-[80px]"><input className={headerInputCls + ' text-right'} value={headers.cantidad} onChange={e => updateHeader('cantidad', e.target.value)} /></th>
+                  <th className="text-right px-2 py-1.5 w-[95px]"><input className={headerInputCls + ' text-right'} value={headers.cantidad} onChange={e => updateHeader('cantidad', e.target.value)} /></th>
+                  <th className="text-left px-2 py-1.5 w-[135px]"><input className={headerInputCls} value={headers.presentacion} onChange={e => updateHeader('presentacion', e.target.value)} /></th>
                   <th className="text-right px-2 py-1.5 w-[115px]"><input className={headerInputCls + ' text-right'} value={headers.precio_lista} onChange={e => updateHeader('precio_lista', e.target.value)} /></th>
                   <th className="text-right px-2 py-1.5 w-[85px]"><input className={headerInputCls + ' text-right'} value={headers.descuento} onChange={e => updateHeader('descuento', e.target.value)} /></th>
                   <th className="text-right px-2 py-1.5 w-[115px]"><input className={headerInputCls + ' text-right'} value={headers.precio_desc} onChange={e => updateHeader('precio_desc', e.target.value)} /></th>
@@ -422,8 +426,10 @@ function QuoteFormModal({ clients, onOpenClientPicker, products, defaultClientId
                           </select>
                         </div>
                         <input className={cellInputCls} placeholder="Descripción" value={it.descripcion} onChange={e => updateItem(i, { descripcion: e.target.value })} />
+                        {it.composicion && <div className="text-[11px] text-gray-400 leading-tight mt-0.5 px-0.5">{it.composicion}</div>}
                       </td>
                       <td className="px-2 py-1 align-top"><input type="number" step="any" placeholder="Opcional" className={cellInputCls + ' text-right'} value={it.cantidad} onChange={e => updateItem(i, { cantidad: e.target.value })} /></td>
+                      <td className="px-2 py-1 align-top"><input placeholder="Ej: 20 lts" className={cellInputCls} value={it.presentacion} onChange={e => updateItem(i, { presentacion: e.target.value })} /></td>
                       <td className="px-2 py-1 align-top"><input type="number" step="any" className={cellInputCls + ' text-right'} value={it.precio_unitario} onChange={e => updateItem(i, { precio_unitario: e.target.value })} /></td>
                       <td className="px-2 py-1 align-top"><input type="number" step="any" className={cellInputCls + ' text-right'} value={it.descuento} onChange={e => updateItem(i, { descuento: e.target.value })} /></td>
                       <td className="px-2 py-1 align-top text-right text-gray-500">{fmtPrecio(precioDesc)}</td>

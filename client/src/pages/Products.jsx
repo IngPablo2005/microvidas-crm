@@ -99,6 +99,7 @@ export default function Products() {
                     <th className="text-left py-1 px-2">Categoría</th>
                     <th className="text-right py-1 px-2">Precio lista</th>
                     <th className="text-left py-1 px-2">Unidad</th>
+                    <th className="text-left py-1 px-2">Presentación</th>
                     <th className="text-left py-1 px-2">Estado</th>
                     <th></th>
                   </tr>
@@ -118,10 +119,12 @@ export default function Products() {
                         ) : (
                           <span>{p.nombre}</span>
                         )}
+                        {p.composicion && <div className="text-[11px] text-gray-400 leading-tight mt-0.5">{p.composicion}</div>}
                       </td>
                       <td className="py-1.5 px-2 text-gray-500">{p.categoria || '—'}</td>
                       <td className="py-1.5 px-2 text-right">{fmtPrecio(p.precio_unitario)} <span className="text-gray-400">{p.moneda}</span></td>
                       <td className="py-1.5 px-2 text-gray-500">{p.unidad}</td>
+                      <td className="py-1.5 px-2 text-gray-500">{p.presentacion || '—'}</td>
                       <td className="py-1.5 px-2"><Badge text={p.activo ? 'Activo' : 'Inactivo'} /></td>
                       <td className="py-1.5 px-2 text-right whitespace-nowrap">
                         <button onClick={() => setEditingProduct(p)} className="text-blue-600 hover:underline text-xs mr-3">Editar</button>
@@ -166,6 +169,8 @@ function ProductFormModal({ proveedores, editingProduct, onClose, onSaved }) {
     precio_unitario: editingProduct?.precio_unitario ?? 0,
     moneda: editingProduct?.moneda || 'USD',
     unidad: editingProduct?.unidad || 'unidad',
+    presentacion: editingProduct?.presentacion || '',
+    composicion: editingProduct?.composicion || '',
     proveedor_id: editingProduct?.proveedor_id || '',
     activo: editingProduct?.activo ?? 1,
   });
@@ -203,6 +208,12 @@ function ProductFormModal({ proveedores, editingProduct, onClose, onSaved }) {
           </Field>
         </div>
         <Field label="Unidad"><input className={inputCls} value={form.unidad} onChange={e => setForm(f => ({ ...f, unidad: e.target.value }))} /></Field>
+        <Field label="Presentación (en la que viene, ej: 20 lts, 2000 kg)">
+          <input className={inputCls} placeholder="Ej: 20 lts, 25 kg, 1000 cc..." value={form.presentacion} onChange={e => setForm(f => ({ ...f, presentacion: e.target.value }))} />
+        </Field>
+        <Field label="Composición (breve, 1 renglón — aparece chico debajo del producto al cotizar)">
+          <input className={inputCls} placeholder="Ej: Nitrógeno 20% + Fósforo 10% + Potasio 10%" value={form.composicion} onChange={e => setForm(f => ({ ...f, composicion: e.target.value }))} />
+        </Field>
         <Field label="Proveedor">
           <select className={inputCls} value={form.proveedor_id} onChange={e => setForm(f => ({ ...f, proveedor_id: e.target.value }))}>
             <option value="">Sin proveedor</option>

@@ -137,6 +137,8 @@ CREATE TABLE IF NOT EXISTS products (
   precio_unitario REAL DEFAULT 0,
   moneda TEXT DEFAULT 'USD',
   unidad TEXT DEFAULT 'unidad',
+  presentacion TEXT, -- presentación en la que viene el producto (ej. "20 lts", "2000 kg"), texto libre, distinto de "unidad"
+  composicion TEXT, -- descripción breve (1 renglón) de la composición del producto, se muestra chico debajo del nombre al cotizar
   logo_data_url TEXT, -- logo/imagen propia del producto (opcional), guardado como data URL (base64), igual que el logo de proveedor
   activo INTEGER DEFAULT 1,
   proveedor_id INTEGER REFERENCES proveedores(id)
@@ -190,7 +192,9 @@ CREATE TABLE IF NOT EXISTS quote_items (
   precio_unitario REAL DEFAULT 0,
   descuento REAL DEFAULT 0,
   financiado REAL DEFAULT 0, -- precio financiado (USD) por unidad, editable manualmente por línea
-  importe REAL DEFAULT 0
+  importe REAL DEFAULT 0,
+  presentacion TEXT, -- presentación del producto cotizado (ej. "20 lts", "2000 kg"), copiada del catálogo al elegir el producto y editable por línea (para "Producto libre...")
+  composicion TEXT -- descripción breve de composición, copiada del catálogo al elegir el producto (foto del dato en ese momento, igual que descripcion/presentacion)
 );
 
 CREATE TABLE IF NOT EXISTS sales (
@@ -376,10 +380,14 @@ CREATE INDEX IF NOT EXISTS idx_client_crops_client ON client_crops(client_id);
 
   const quoteItemCols = (await db.prepare("PRAGMA table_info(quote_items)").all()).map(c => c.name);
   if (!quoteItemCols.includes('financiado')) await exec('ALTER TABLE quote_items ADD COLUMN financiado REAL DEFAULT 0');
+  if (!quoteItemCols.includes('presentacion')) await exec('ALTER TABLE quote_items ADD COLUMN presentacion TEXT');
+  if (!quoteItemCols.includes('composicion')) await exec('ALTER TABLE quote_items ADD COLUMN composicion TEXT');
 
   const productCols = (await db.prepare("PRAGMA table_info(products)").all()).map(c => c.name);
   if (!productCols.includes('proveedor_id')) await exec('ALTER TABLE products ADD COLUMN proveedor_id INTEGER REFERENCES proveedores(id)');
   if (!productCols.includes('logo_data_url')) await exec('ALTER TABLE products ADD COLUMN logo_data_url TEXT');
+  if (!productCols.includes('presentacion')) await exec('ALTER TABLE products ADD COLUMN presentacion TEXT');
+  if (!productCols.includes('composicion')) await exec('ALTER TABLE products ADD COLUMN composicion TEXT');
 
   const collectionCols = (await db.prepare("PRAGMA table_info(collections)").all()).map(c => c.name);
   if (!collectionCols.includes('invoice_id')) await exec('ALTER TABLE collections ADD COLUMN invoice_id INTEGER REFERENCES invoices(id)');
