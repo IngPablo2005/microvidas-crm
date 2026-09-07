@@ -58,6 +58,23 @@ export function parseTablaPegada(raw) {
   }
 }
 
+// Parsea las imágenes pegadas (Ctrl+V) en "Información adicional" de una
+// cotización (quotes.imagenes_pegadas, guardada como JSON de un array de data
+// URLs en base64, ya redimensionadas y convertidas a JPEG en el navegador
+// antes de guardarse). Devuelve siempre un array de strings, filtrando
+// cualquier valor que no sea un data URL de imagen válido, nunca revienta con
+// un JSON corrupto o vacío.
+export function parseImagenesPegadas(raw) {
+  if (!raw) return [];
+  try {
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return [];
+    return arr.filter(s => typeof s === 'string' && /^data:image\/[a-zA-Z0-9.+-]+;base64,/.test(s));
+  } catch {
+    return [];
+  }
+}
+
 export async function paginate(query, params, page = 1, pageSize = 50) {
   const offset = (page - 1) * pageSize;
   return db.prepare(`${query} LIMIT ? OFFSET ?`).all(...params, pageSize, offset);

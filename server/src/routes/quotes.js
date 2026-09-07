@@ -3,7 +3,7 @@ import PDFDocument from 'pdfkit';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import db from '../db.js';
-import { logActivity, genNumber, fmtFechaAR, parseTablaPegada } from '../helpers.js';
+import { logActivity, genNumber, fmtFechaAR, parseTablaPegada, parseImagenesPegadas } from '../helpers.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LOGO_PATH = path.join(__dirname, '..', 'assets', 'microvidas-logo.png');
@@ -79,19 +79,20 @@ router.get('/:id', async (req, res) => {
   if (!quote) return res.status(404).json({ error: 'Cotización no encontrada' });
   const items = await db.prepare(`SELECT qi.*, p.logo_data_url as producto_logo FROM quote_items qi
     LEFT JOIN products p ON p.id = qi.product_id WHERE qi.quote_id = ?`).all(req.params.id);
-  res.json({ ...quote, item_headers: parseItemHeaders(quote.item_headers), tabla_pegada: parseTablaPegada(quote.tabla_pegada), items });
+  res.json({ ...quote, item_headers: parseItemHeaders(quote.item_headers), tabla_pegada: parseTablaPegada(quote.tabla_pegada), imagenes_pegadas: parseImagenesPegadas(quote.imagenes_pegadas), items });
 });
 
 router.post('/', async (req, res) => {
-  const { client_id, fecha, fecha_vencimiento, moneda, descuento_general, items, probabilidad_cierre, responsable, observaciones, condiciones_comerciales, notas_tabla, item_headers, tabla_pegada, usuario } = req.body;
+  const { client_id, fecha, fecha_vencimiento, moneda, descuento_general, items, probabilidad_cierre, responsable, observaciones, condiciones_comerciales, notas_tabla, item_headers, tabla_pegada, imagenes_pegadas, usuario } = req.body;
   const { computed, subtotal, total, totalFinanciado } = computeTotals(items || [], descuento_general);
   const numero = await genNumber('COT', 'quotes');
-  const id = (await db.prepare(`INSERT INTO quotes (numero, client_id, fecha, fecha_vencimiento, moneda, descuento_general, subtotal, total, total_financiado, probabilidad_cierre, estado, responsable, observaciones, condiciones_comerciales, notas_tabla, item_headers, tabla_pegada)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+  const id = (await db.prepare(`INSERT INTO quotes (numero, client_id, fecha, fecha_vencimiento, moneda, descuento_general, subtotal, total, total_financiado, probabilidad_cierre, estado, responsable, observaciones, condiciones_comerciales, notas_tabla, item_headers, tabla_pegada, imagenes_pegadas)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
     numero, client_id, fecha || new Date().toISOString().slice(0, 10), fecha_vencimiento, moneda || 'USD',
     descuento_general || 0, subtotal, total, totalFinanciado, probabilidad_cierre || 50, 'Borrador', responsable, observaciones,
     condiciones_comerciales || null, notas_tabla || null, item_headers ? JSON.stringify(item_headers) : null,
-    (tabla_pegada && Array.isArray(tabla_pegada) && tabla_pegada.length) ? JSON.stringify(tabla_pegada) : null
+    (tabla_pegada && Array.isArray(tabla_pegada) && tabla_pegada.length) ? JSON.stringify(tabla_pegada) : null,
+    (imagenes_pegadas && Array.isArray(imagenes_pegadas) && imagenes_pegadas.length) ? JSON.stringify(imagenes_pegadas) : null
   )).lastInsertRowid;
   const insItem = db.prepare('INSERT INTO quote_items (quote_id, product_id, descripcion, cantidad, precio_unitario, descuento, financiado, importe) VALUES (?,?,?,?,?,?,?,?)');
   for (const it of computed) await insItem.run(id, it.product_id || null, it.descripcion, it.cantidad, it.precio_unitario, it.descuento || 0, it.financiado || 0, it.importe);
@@ -106,17 +107,20 @@ router.put('/:id', async (req, res) => {
   const quote = await db.prepare('SELECT * FROM quotes WHERE id = ?').get(req.params.id);
   if (!quote) return res.status(404).json({ error: 'Cotización no encontrada' });
 
-  const { fecha, fecha_vencimiento, moneda, descuento_general, items, probabilidad_cierre, responsable, observaciones, condiciones_comerciales, notas_tabla, item_headers, tabla_pegada, usuario } = req.body;
+  const { fecha, fecha_vencimiento, moneda, descuento_general, items, probabilidad_cierre, responsable, observaciones, condiciones_comerciales, notas_tabla, item_headers, tabla_pegada, imagenes_pegadas, usuario } = req.body;
   const { computed, subtotal, total, totalFinanciado } = computeTotals(items || [], descuento_general ?? quote.descuento_general);
 
-  // tabla_pegada: undefined significa "no vino en el body" (conservar la anterior);
-  // null o [] explícito significa "se quitó la tabla" (el botón "Quitar tabla" del
-  // frontend manda null).
+  // tabla_pegada / imagenes_pegadas: undefined significa "no vino en el body"
+  // (conservar el valor anterior); null o [] explícito significa "se quitó"
+  // (el botón "Quitar tabla"/"✕" de cada imagen, en el frontend, manda eso).
   const tablaPegadaValue = tabla_pegada === undefined
     ? quote.tabla_pegada
     : ((Array.isArray(tabla_pegada) && tabla_pegada.length) ? JSON.stringify(tabla_pegada) : null);
+  const imagenesPegadasValue = imagenes_pegadas === undefined
+    ? quote.imagenes_pegadas
+    : ((Array.isArray(imagenes_pegadas) && imagenes_pegadas.length) ? JSON.stringify(imagenes_pegadas) : null);
 
-  await db.prepare(`UPDATE quotes SET fecha=?, fecha_vencimiento=?, moneda=?, descuento_general=?, subtotal=?, total=?, total_financiado=?, probabilidad_cierre=?, responsable=?, observaciones=?, condiciones_comerciales=?, notas_tabla=?, item_headers=?, tabla_pegada=?, updated_at=datetime('now') WHERE id=?`)
+  await db.prepare(`UPDATE quotes SET fecha=?, fecha_vencimiento=?, moneda=?, descuento_general=?, subtotal=?, total=?, total_financiado=?, probabilidad_cierre=?, responsable=?, observaciones=?, condiciones_comerciales=?, notas_tabla=?, item_headers=?, tabla_pegada=?, imagenes_pegadas=?, updated_at=datetime('now') WHERE id=?`)
     .run(
       fecha || quote.fecha,
       fecha_vencimiento ?? quote.fecha_vencimiento,
@@ -130,6 +134,7 @@ router.put('/:id', async (req, res) => {
       notas_tabla ?? quote.notas_tabla,
       item_headers ? JSON.stringify(item_headers) : quote.item_headers,
       tablaPegadaValue,
+      imagenesPegadasValue,
       req.params.id
     );
   await db.prepare('DELETE FROM quote_items WHERE quote_id = ?').run(req.params.id);
@@ -202,6 +207,7 @@ router.get('/:id/pdf', async (req, res) => {
   const headers = parseItemHeaders(quote.item_headers);
   const notasTablaRows = parseNotasTabla(quote.notas_tabla);
   const tablaPegadaRows = parseTablaPegada(quote.tabla_pegada);
+  const imagenesPegadas = parseImagenesPegadas(quote.imagenes_pegadas);
   const moneda = quote.moneda || 'USD';
 
   const doc = new PDFDocument({ margin: 30, size: 'A4' });
@@ -384,6 +390,34 @@ router.get('/:id/pdf', async (req, res) => {
       y += rowH;
     }
     y += 10;
+  }
+
+  // Imágenes pegadas (Ctrl+V, ej. una captura de pantalla o una foto) — se
+  // dibujan una debajo de la otra, cada una limitada a un alto máximo para que
+  // ninguna ocupe una página entera. Comparten el mismo título "Información
+  // adicional" que la tabla pegada (no se repite si ya se mostró arriba).
+  if (imagenesPegadas.length) {
+    y += 6;
+    if (!tablaPegadaRows.length) {
+      doc.fontSize(9).fillColor(GREEN).font('Helvetica-Bold').text('Información adicional', left, y);
+      y += 14;
+    }
+    const imgMaxH = 200;
+    for (const dataUrl of imagenesPegadas) {
+      const buf = dataUrlToBuffer(dataUrl);
+      if (!buf) continue; // si no se puede decodificar, se omite sin cortar el PDF
+      if (y + imgMaxH > doc.page.height - 90) { doc.addPage(); y = 40; }
+      try {
+        doc.image(buf, left, y, { fit: [tableWidth, imgMaxH] });
+      } catch {
+        continue;
+      }
+      // pdfkit no devuelve el alto final que ocupó la imagen tras "fit" (depende
+      // de su relación de aspecto), así que se reserva siempre el alto máximo
+      // para no superponerla con lo que sigue — puede dejar algo de espacio de
+      // más si la imagen queda más chica, pero nunca se pisan.
+      y += imgMaxH + 8;
+    }
   }
 
   // Pie

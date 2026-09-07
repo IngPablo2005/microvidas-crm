@@ -231,22 +231,33 @@ export default function Quotes() {
                 </table>
               </div>
             )}
-            {detail.tabla_pegada?.length > 0 && (
-              <div>
+            {(detail.tabla_pegada?.length > 0 || detail.imagenes_pegadas?.length > 0) && (
+              <div className="space-y-2">
                 <div className="text-xs font-semibold text-gray-600 mb-1">Información adicional</div>
-                <div className="overflow-x-auto rounded-md border border-gray-200">
-                  <table className="text-sm w-full">
-                    <tbody>
-                      {detail.tabla_pegada.map((row, i) => (
-                        <tr key={i} className="border-t border-gray-100 first:border-t-0">
-                          {row.map((cell, j) => (
-                            <td key={j} className="px-3 py-1.5 border-r border-gray-100 last:border-r-0 text-gray-600 align-top whitespace-pre-wrap">{cell}</td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                {detail.tabla_pegada?.length > 0 && (
+                  <div className="overflow-x-auto rounded-md border border-gray-200">
+                    <table className="text-sm w-full">
+                      <tbody>
+                        {detail.tabla_pegada.map((row, i) => (
+                          <tr key={i} className="border-t border-gray-100 first:border-t-0">
+                            {row.map((cell, j) => (
+                              <td key={j} className="px-3 py-1.5 border-r border-gray-100 last:border-r-0 text-gray-600 align-top whitespace-pre-wrap">{cell}</td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                {detail.imagenes_pegadas?.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {detail.imagenes_pegadas.map((src, i) => (
+                      <a key={i} href={src} target="_blank" rel="noreferrer">
+                        <img src={src} alt={`Imagen ${i + 1}`} className="h-28 rounded-md border border-gray-200 object-cover" />
+                      </a>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
             <div className="flex flex-wrap gap-2 justify-end pt-2 border-t border-gray-100">
@@ -296,6 +307,9 @@ function QuoteFormModal({ clients, onOpenClientPicker, products, defaultClientId
   const [tablaPegada, setTablaPegada] = useState(
     editingQuote?.tabla_pegada?.length ? editingQuote.tabla_pegada : null
   );
+  const [imagenesPegadas, setImagenesPegadas] = useState(
+    editingQuote?.imagenes_pegadas?.length ? editingQuote.imagenes_pegadas : []
+  );
   const [headers, setHeaders] = useState({ ...DEFAULT_ITEM_HEADERS, ...(editingQuote?.item_headers || {}) });
   const [items, setItems] = useState(
     editingQuote?.items?.length
@@ -333,7 +347,7 @@ function QuoteFormModal({ clients, onOpenClientPicker, products, defaultClientId
     if (saving) return; // evita doble envío si se hace doble clic
     setSaving(true);
     setSaveError('');
-    const payload = { fecha_vencimiento: fechaVencimiento, items, responsable, observaciones, condiciones_comerciales: condicionesComerciales, notas_tabla: notasTabla, item_headers: headers, tabla_pegada: tablaPegada, usuario: 'Usuario' };
+    const payload = { fecha_vencimiento: fechaVencimiento, items, responsable, observaciones, condiciones_comerciales: condicionesComerciales, notas_tabla: notasTabla, item_headers: headers, tabla_pegada: tablaPegada, imagenes_pegadas: imagenesPegadas, usuario: 'Usuario' };
     try {
       if (isEditing) {
         await api.put(`/quotes/${editingQuote.id}`, payload);
@@ -443,8 +457,8 @@ function QuoteFormModal({ clients, onOpenClientPicker, products, defaultClientId
             placeholder="Una línea por fila, con formato Título: Detalle. Ej: Precio en Dólares + IVA: Sujeto a modificaciones sin previo aviso."
           />
         </Field>
-        <Field label="Información adicional (pegar tabla de Word o Excel)">
-          <PasteTable value={tablaPegada} onChange={setTablaPegada} />
+        <Field label="Información adicional (pegar tabla de Word/Excel o una imagen)">
+          <PasteTable value={tablaPegada} onChange={setTablaPegada} imagenes={imagenesPegadas} onImagenesChange={setImagenesPegadas} />
         </Field>
 
         {(anyCantidad || totalFinanciado > 0) && (

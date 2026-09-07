@@ -175,6 +175,7 @@ CREATE TABLE IF NOT EXISTS quotes (
   notas_tabla TEXT, -- cuadro de notas (precio en USD+IVA, tipo de cambio, tarjetas, etc.), precargado desde settings.notas_tabla_default; una fila por línea con formato "Título: Detalle"
   item_headers TEXT, -- JSON con los títulos de columna de la tabla de productos (editable por cotización)
   tabla_pegada TEXT, -- tabla pegada desde Word/Excel (Ctrl+V), guardada como JSON de filas/columnas de texto (array de arrays); ver parseTablaPegada en helpers.js
+  imagenes_pegadas TEXT, -- imágenes pegadas (Ctrl+V) en Información adicional, guardadas como JSON de un array de data URLs JPEG (base64); ver parseImagenesPegadas en helpers.js
   total_financiado REAL DEFAULT 0,
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now'))
@@ -371,6 +372,7 @@ CREATE INDEX IF NOT EXISTS idx_client_crops_client ON client_crops(client_id);
   if (!quoteCols.includes('total_financiado')) await exec('ALTER TABLE quotes ADD COLUMN total_financiado REAL DEFAULT 0');
   if (!quoteCols.includes('notas_tabla')) await exec('ALTER TABLE quotes ADD COLUMN notas_tabla TEXT');
   if (!quoteCols.includes('tabla_pegada')) await exec('ALTER TABLE quotes ADD COLUMN tabla_pegada TEXT');
+  if (!quoteCols.includes('imagenes_pegadas')) await exec('ALTER TABLE quotes ADD COLUMN imagenes_pegadas TEXT');
 
   const quoteItemCols = (await db.prepare("PRAGMA table_info(quote_items)").all()).map(c => c.name);
   if (!quoteItemCols.includes('financiado')) await exec('ALTER TABLE quote_items ADD COLUMN financiado REAL DEFAULT 0');
