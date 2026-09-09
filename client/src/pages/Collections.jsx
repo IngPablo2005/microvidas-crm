@@ -20,6 +20,7 @@ export default function Collections() {
   const [showNew, setShowNew] = useState(false);
   const [showCommit, setShowCommit] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [editingInvoice, setEditingInvoice] = useState(null);
   const [markingPaid, setMarkingPaid] = useState(null);
   const [tab, setTab] = useState('cobranzas');
 
@@ -146,10 +147,17 @@ export default function Collections() {
             </thead>
             <tbody>
               {invoices.map(i => (
-                <tr key={i.id} className="border-t border-gray-100 hover:bg-blue-50">
+                <tr key={i.id} data-invoice-id={i.id} className="border-t border-gray-100 hover:bg-blue-50">
                   <td className="px-4 py-2.5">{i.numero}</td>
                   <td className="px-4 py-2.5"><Link to={`/clientes/${i.client_id}`} className="font-medium text-gray-800 hover:text-blue-600">{i.cliente_nombre}</Link></td>
-                  <td className="px-4 py-2.5 text-gray-500">{fmtDate(i.fecha_vencimiento)}</td>
+                  <td className="px-4 py-2.5 text-gray-500">
+                    <div className="flex items-center gap-1.5">
+                      {fmtDate(i.fecha_vencimiento)}
+                      <button title="Editar vencimiento" onClick={() => setEditingInvoice(i)} className="text-gray-300 hover:text-blue-600 p-0.5 rounded hover:bg-blue-50">
+                        <Pencil size={12} />
+                      </button>
+                    </div>
+                  </td>
                   <td className="px-4 py-2.5 text-right">{fmtMoneda(i.importe, i.moneda)}</td>
                   <td className="px-4 py-2.5 text-right font-medium">{fmtMoneda(i.saldo, i.moneda)}</td>
                   <td className="px-4 py-2.5"><Badge text={i.estado} /></td>
@@ -208,6 +216,9 @@ export default function Collections() {
       )}
       {editing && (
         <CollectionFormModal editing={editing} onClose={() => setEditing(null)} clients={clients} onOpenClientPicker={refreshClients} onSaved={() => { setEditing(null); load(); }} />
+      )}
+      {editingInvoice && (
+        <InvoiceDueDateModal invoice={editingInvoice} onClose={() => setEditingInvoice(null)} onSaved={() => { setEditingInvoice(null); load(); }} />
       )}
       <CommitmentModal open={showCommit} onClose={() => setShowCommit(false)} clients={clients} onOpenClientPicker={refreshClients} onSaved={() => { setShowCommit(false); load(); }} />
     </div>
@@ -279,6 +290,37 @@ function CollectionFormModal({ editing, onClose, clients, onOpenClientPicker, on
         <div className="flex justify-end gap-2 mt-2">
           <Button variant="secondary" type="button" onClick={onClose} disabled={saving}>Cancelar</Button>
           <Button type="submit" disabled={saving}>{saving ? 'Guardando...' : (isEditing ? 'Guardar cambios' : 'Registrar')}</Button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+// Editar sólo el vencimiento de una factura ya creada — para corregir el
+// plazo por defecto (30 días) cuando un cliente tiene otro término, sin tener
+// que borrar y volver a cargar la venta. El estado "Vencida"/"Pendiente" se
+// recalcula solo en el servidor a partir de esta fecha (no hace falta tocarlo
+// acá) — ver estadoFactura en server/src/helpers.js.
+function InvoiceDueDateModal({ invoice, onClose, onSaved }) {
+  const [fecha, setFecha] = useState(invoice.fecha_vencimiento?.slice(0, 10) || '');
+  const [saving, setSaving] = useState(false);
+  async function save(e) {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await api.put(`/collections/invoices/${invoice.id}`, { fecha_vencimiento: fecha });
+      onSaved();
+    } finally {
+      setSaving(false);
+    }
+  }
+  return (
+    <Modal open onClose={onClose} title={`Vencimiento de la factura ${invoice.numero}`}>
+      <form onSubmit={save}>
+        <Field label="Nueva fecha de vencimiento"><DateInput className={inputCls} value={fecha} onChange={setFecha} /></Field>
+        <div className="flex justify-end gap-2 mt-2">
+          <Button variant="secondary" type="button" onClick={onClose} disabled={saving}>Cancelar</Button>
+          <Button type="submit" disabled={saving}>{saving ? 'Guardando...' : 'Guardar'}</Button>
         </div>
       </form>
     </Modal>

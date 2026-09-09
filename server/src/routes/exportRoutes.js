@@ -273,7 +273,12 @@ const QUERIES = {
   pipeline: `SELECT po.titulo, COALESCE(c.razon_social, p.empresa) as cliente_o_prospecto, po.etapa, po.importe_estimado, po.probabilidad, po.responsable, po.fecha_cierre_estimada FROM pipeline_opportunities po LEFT JOIN clients c ON c.id = po.client_id LEFT JOIN prospects p ON p.id = po.prospect_id`,
   milestones: `SELECT m.fecha, c.razon_social as cliente, m.tipo, m.descripcion FROM milestones m JOIN clients c ON c.id = m.client_id ORDER BY m.fecha DESC`,
   collections: `SELECT col.fecha, c.razon_social as cliente, col.comprobante, col.factura, col.importe, col.moneda, col.medio_pago, col.responsable FROM collections col JOIN clients c ON c.id = col.client_id ORDER BY col.fecha DESC`,
-  invoices: `SELECT i.numero, c.razon_social as cliente, i.fecha, i.fecha_vencimiento, i.importe, i.saldo, i.estado FROM invoices i JOIN clients c ON c.id = i.client_id ORDER BY i.fecha_vencimiento`,
+  // El estado exportado se recalcula igual que en la app (ver estadoFactura en
+  // helpers.js) en vez de usar la columna grabada, para que "Vencida" refleje
+  // la fecha de vencimiento actual y no un valor que pudo quedar desactualizado.
+  invoices: `SELECT i.numero, c.razon_social as cliente, i.fecha, i.fecha_vencimiento, i.importe, i.saldo,
+      CASE WHEN i.saldo <= 0 THEN 'Pagada' WHEN i.fecha_vencimiento IS NOT NULL AND i.fecha_vencimiento < date('now') THEN 'Vencida' ELSE 'Pendiente' END as estado
+    FROM invoices i JOIN clients c ON c.id = i.client_id ORDER BY i.fecha_vencimiento`,
 };
 
 function rowsToCSV(rows) {

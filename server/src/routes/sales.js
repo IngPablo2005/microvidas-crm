@@ -1,6 +1,6 @@
 import express from 'express';
 import db from '../db.js';
-import { logActivity, genNumber } from '../helpers.js';
+import { logActivity, genNumber, addDaysStr } from '../helpers.js';
 
 const router = express.Router();
 
@@ -37,7 +37,7 @@ router.get('/:id', async (req, res) => {
 });
 
 router.post('/', async (req, res) => {
-  const { client_id, quote_id, fecha, moneda, items, vendedor, observaciones, usuario } = req.body;
+  const { client_id, quote_id, fecha, moneda, items, vendedor, observaciones, plazo_pago_dias, usuario } = req.body;
   let total = 0;
   const computed = (items || []).slice(0, 5).map(it => {
     const importe = Number(it.cantidad) * Number(it.precio_unitario);
@@ -52,9 +52,15 @@ router.post('/', async (req, res) => {
   await logActivity(client_id, 'Venta', `Venta ${numero} registrada por ${moneda || 'USD'} ${total.toFixed(2)}.`, usuario, 'sales', id);
   const existing = await db.prepare(`SELECT id FROM milestones WHERE client_id = ? AND tipo = 'Primera venta'`).get(client_id);
   if (!existing) await db.prepare(`INSERT INTO milestones (client_id, tipo, descripcion, fecha) VALUES (?,?,?,date('now'))`).run(client_id, 'Primera venta', `Primera venta registrada (${numero}).`);
-  // Crear factura pendiente asociada (30 días)
-  await db.prepare(`INSERT INTO invoices (client_id, sale_id, numero, fecha, fecha_vencimiento, importe, moneda, saldo, estado) VALUES (?,?,?,?, date(?, '+30 days'),?,?,?,'Pendiente')`)
-    .run(client_id, id, numero.replace('VTA', 'FC'), fecha || new Date().toISOString().slice(0, 10), fecha || new Date().toISOString().slice(0, 10), total, moneda || 'USD', total);
+  // Crear factura pendiente asociada. El plazo de pago (días desde la fecha de
+  // la venta hasta el vencimiento) es de 30 días por defecto, pero se puede
+  // indicar otro al registrar la venta (ej. clientes con 60/90 días) — y de
+  // todas formas el vencimiento se puede seguir ajustando después a mano
+  // desde la pestaña Facturas si hace falta corregirlo.
+  const fechaVenta = fecha || new Date().toISOString().slice(0, 10);
+  const fechaVencimiento = addDaysStr(fechaVenta, plazo_pago_dias === undefined || plazo_pago_dias === '' ? 30 : plazo_pago_dias);
+  await db.prepare(`INSERT INTO invoices (client_id, sale_id, numero, fecha, fecha_vencimiento, importe, moneda, saldo, estado) VALUES (?,?,?,?,?,?,?,?,'Pendiente')`)
+    .run(client_id, id, numero.replace('VTA', 'FC'), fechaVenta, fechaVencimiento, total, moneda || 'USD', total);
   res.status(201).json({ id, numero });
 });
 
@@ -85,7 +91,10 @@ router.put('/:id', async (req, res) => {
   if (invoice) {
     const pagado = invoice.importe - invoice.saldo;
     const nuevoSaldo = Math.max(0, total - pagado);
-    const nuevoEstado = nuevoSaldo <= 0 ? 'Pagada' : (invoice.estado === 'Vencida' ? 'Vencida' : 'Pendiente');
+    // El estado grabado sólo distingue "Pagada" de "Pendiente" — si está vencida
+    // o no se calcula al leerla (ver estadoFactura en helpers.js), comparando
+    // el saldo y la fecha de vencimiento con la fecha de hoy en ese momento.
+    const nuevoEstado = nuevoSaldo <= 0 ? 'Pagada' : 'Pendiente';
     await db.prepare('UPDATE invoices SET importe=?, saldo=?, estado=? WHERE id=?').run(total, nuevoSaldo, nuevoEstado, invoice.id);
   }
 

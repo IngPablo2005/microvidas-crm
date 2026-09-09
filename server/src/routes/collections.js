@@ -1,6 +1,6 @@
 import express from 'express';
 import db from '../db.js';
-import { logActivity } from '../helpers.js';
+import { logActivity, estadoFactura } from '../helpers.js';
 
 const router = express.Router();
 
@@ -42,12 +42,10 @@ async function ajustarSaldoFactura(invoiceId, importe, signo) {
   const inv = await db.prepare('SELECT * FROM invoices WHERE id = ?').get(invoiceId);
   if (!inv) return;
   const nuevoSaldo = Math.max(0, Math.min(inv.importe, inv.saldo + signo * Number(importe || 0)));
-  // Si el saldo vuelve a quedar en positivo (ej. se deshace una cobranza que la
-  // había dejado en 0/"Pagada"), el estado vuelve a "Pendiente" — salvo que ya
-  // estuviera en otro estado manual (ej. no debería pisar "Vencida" al revés,
-  // pero acá no se puede saber la fecha de vencimiento sin otra consulta, así
-  // que sólo se corrige el caso más común: "Pagada" con saldo > 0 no tiene sentido).
-  const estado = nuevoSaldo === 0 ? 'Pagada' : (inv.estado === 'Pagada' ? 'Pendiente' : inv.estado);
+  // El estado grabado sólo distingue "Pagada" de "Pendiente" — si está vencida
+  // se calcula al leerla (estadoFactura), comparando saldo y fecha de
+  // vencimiento con hoy, así que acá alcanza con este chequeo simple.
+  const estado = nuevoSaldo === 0 ? 'Pagada' : 'Pendiente';
   await db.prepare('UPDATE invoices SET saldo = ?, estado = ? WHERE id = ?').run(nuevoSaldo, estado, invoiceId);
 }
 
@@ -102,15 +100,18 @@ router.delete('/:id', async (req, res) => {
 // Cuenta corriente por cliente
 router.get('/account/:clientId', async (req, res) => {
   const clientId = req.params.clientId;
-  const invoices = await db.prepare('SELECT * FROM invoices WHERE client_id = ? ORDER BY fecha DESC').all(clientId);
+  const invoicesRaw = await db.prepare('SELECT * FROM invoices WHERE client_id = ? ORDER BY fecha DESC').all(clientId);
   const collections = await db.prepare('SELECT * FROM collections WHERE client_id = ? ORDER BY fecha DESC').all(clientId);
+  // El estado "Vencida" se calcula acá (no viene grabado tal cual en la base)
+  // comparando saldo y fecha de vencimiento con hoy — ver estadoFactura.
+  const invoices = invoicesRaw.map(i => ({ ...i, estado: estadoFactura(i) }));
   const totalFacturado = invoices.reduce((s, i) => s + i.importe, 0);
   const totalCobrado = totalFacturado - invoices.reduce((s, i) => s + i.saldo, 0);
   const totalVencido = invoices.filter(i => i.estado === 'Vencida').reduce((s, i) => s + i.saldo, 0);
   const totalPendiente = invoices.reduce((s, i) => s + i.saldo, 0);
   const ultimaCobranza = collections[0] || null;
   const proximoVencimiento = invoices.filter(i => i.saldo > 0).sort((a, b) => new Date(a.fecha_vencimiento) - new Date(b.fecha_vencimiento))[0] || null;
-  const vencidas = invoices.filter(i => i.estado === 'Vencida' && i.saldo > 0);
+  const vencidas = invoices.filter(i => i.estado === 'Vencida');
   const diasPromedioAtraso = vencidas.length
     ? Math.round(vencidas.reduce((s, i) => s + Math.max(0, Math.floor((Date.now() - new Date(i.fecha_vencimiento)) / 86400000)), 0) / vencidas.length)
     : 0;
@@ -160,9 +161,26 @@ router.get('/invoices', async (req, res) => {
   let sql = `SELECT i.*, c.razon_social as cliente_nombre FROM invoices i JOIN clients c ON c.id = i.client_id WHERE 1=1`;
   const params = [];
   if (client_id) { sql += ' AND i.client_id = ?'; params.push(client_id); }
-  if (estado) { sql += ' AND i.estado = ?'; params.push(estado); }
   sql += ' ORDER BY i.fecha_vencimiento ASC';
-  res.json(await db.prepare(sql).all(...params));
+  let rows = (await db.prepare(sql).all(...params)).map(i => ({ ...i, estado: estadoFactura(i) }));
+  // El filtro por estado se aplica sobre el estado ya calculado (no el grabado
+  // en la base), para que "Vencida" filtre por la fecha real y no por un valor
+  // que puede haber quedado desactualizado — ver estadoFactura en helpers.js.
+  if (estado) rows = rows.filter(i => i.estado === estado);
+  res.json(rows);
+});
+
+// Edita el vencimiento de una factura (y, si hace falta corregirlo, el
+// importe/moneda) — agregado para poder ajustar el plazo de pago después de
+// creada la factura (ej. un cliente con más días de los 30 por defecto), sin
+// tener que borrar y recrear la venta.
+router.put('/invoices/:id', async (req, res) => {
+  const inv = await db.prepare('SELECT * FROM invoices WHERE id = ?').get(req.params.id);
+  if (!inv) return res.status(404).json({ error: 'Factura no encontrada' });
+  const { fecha_vencimiento } = req.body;
+  await db.prepare('UPDATE invoices SET fecha_vencimiento = ? WHERE id = ?')
+    .run(fecha_vencimiento ?? inv.fecha_vencimiento, req.params.id);
+  res.json({ ok: true });
 });
 
 export default router;

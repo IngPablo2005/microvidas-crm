@@ -10,6 +10,33 @@ export function todayStr() {
   return new Date().toISOString().slice(0, 10);
 }
 
+// Determina el estado real de una factura EN EL MOMENTO DE LA CONSULTA,
+// comparando saldo y fecha de vencimiento contra hoy — en vez de depender de
+// un valor "Vencida" grabado de una vez en la base, que quedaría
+// desactualizado apenas se editara la fecha de vencimiento o pasara el
+// tiempo (agregado 9/9/2026, junto con poder editar el vencimiento de una
+// factura). "Pagada" es la única condición que sigue viniendo de la base:
+// se decide al registrar/deshacer una cobranza, no por fecha. Comparación de
+// strings porque fecha_vencimiento se guarda como "aaaa-mm-dd" (ordena igual
+// que Date, sin el riesgo de corrimiento de huso horario de pasar por Date()).
+// Suma días a una fecha "sola" (aaaa-mm-dd, sin hora) armando el resultado con
+// UTC en vez de pasar por el reloj/huso horario del servidor — evita el mismo
+// corrimiento de día documentado arriba en fmtFechaAR si se usara `new
+// Date("aaaa-mm-dd")` directamente (se interpreta como medianoche UTC).
+export function addDaysStr(dateStr, days) {
+  const [y, m, d] = dateStr.slice(0, 10).split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + Number(days || 0));
+  return dt.toISOString().slice(0, 10);
+}
+
+export function estadoFactura(inv) {
+  if (inv.saldo <= 0) return 'Pagada';
+  const hoy = todayStr();
+  if (inv.fecha_vencimiento && inv.fecha_vencimiento.slice(0, 10) < hoy) return 'Vencida';
+  return 'Pendiente';
+}
+
 function pad2(n) {
   return String(n).padStart(2, '0');
 }

@@ -2,7 +2,7 @@ import express from 'express';
 import db from '../db.js';
 import { getWeeklySummary } from '../lib/weeklySummary.js';
 import { getWeeklyDailyDetail } from '../lib/weeklyDailyDetail.js';
-import { normalizeText } from '../helpers.js';
+import { normalizeText, todayStr } from '../helpers.js';
 
 const router = express.Router();
 
@@ -172,9 +172,12 @@ router.get('/collections-by-method', async (req, res) => {
 });
 
 router.get('/debt-evolution', async (req, res) => {
-  const vencido = (await db.prepare(`SELECT COALESCE(SUM(saldo),0) v FROM invoices WHERE estado = 'Vencida' AND saldo > 0`).get()).v;
+  // "Vencida" se calcula comparando fecha_vencimiento con hoy, no viene grabada
+  // como tal en la base — ver estadoFactura en helpers.js.
+  const t = todayStr();
+  const vencido = (await db.prepare(`SELECT COALESCE(SUM(saldo),0) v FROM invoices WHERE saldo > 0 AND fecha_vencimiento < ?`).get(t)).v;
   const cobrado = (await db.prepare(`SELECT COALESCE(SUM(importe),0) v FROM collections`).get()).v;
-  const pendiente = (await db.prepare(`SELECT COALESCE(SUM(saldo),0) v FROM invoices WHERE saldo > 0 AND estado != 'Vencida'`).get()).v;
+  const pendiente = (await db.prepare(`SELECT COALESCE(SUM(saldo),0) v FROM invoices WHERE saldo > 0 AND (fecha_vencimiento IS NULL OR fecha_vencimiento >= ?)`).get(t)).v;
   res.json({ vencido, cobrado, pendiente });
 });
 

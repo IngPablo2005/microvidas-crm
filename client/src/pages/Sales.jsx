@@ -162,6 +162,12 @@ function SaleFormModal({ clients, onOpenClientPicker, products, defaultClientId,
   const [fecha, setFecha] = useState(editingSale?.fecha?.slice(0, 10) || new Date().toISOString().slice(0, 10));
   const [vendedor, setVendedor] = useState(editingSale?.vendedor || '');
   const [observaciones, setObservaciones] = useState(editingSale?.observaciones || '');
+  // Sólo se pide al registrar una venta nueva: define el vencimiento de la
+  // factura que se crea junto con la venta (fecha de la venta + este plazo).
+  // Si hace falta corregirlo después (ej. se cargó con el plazo por defecto y
+  // en realidad el cliente tiene otro), se ajusta directamente en la pestaña
+  // Facturas de Cobranzas, no editando la venta.
+  const [plazoPagoDias, setPlazoPagoDias] = useState(30);
   const [items, setItems] = useState(
     editingSale?.items?.length
       ? editingSale.items.map(it => ({ product_id: it.product_id || '', descripcion: it.descripcion, cantidad: it.cantidad, precio_unitario: it.precio_unitario }))
@@ -185,7 +191,7 @@ function SaleFormModal({ clients, onOpenClientPicker, products, defaultClientId,
     if (isEditing) {
       await api.put(`/sales/${editingSale.id}`, { fecha, vendedor, items, observaciones, usuario: 'Usuario' });
     } else {
-      await api.post('/sales', { client_id: clientId, fecha, vendedor, items, observaciones, usuario: 'Usuario' });
+      await api.post('/sales', { client_id: clientId, fecha, vendedor, items, observaciones, plazo_pago_dias: plazoPagoDias, usuario: 'Usuario' });
     }
     onSaved();
   }
@@ -204,6 +210,12 @@ function SaleFormModal({ clients, onOpenClientPicker, products, defaultClientId,
           <Field label="Fecha"><DateInput className={inputCls} value={fecha} onChange={v => setFecha(v)} /></Field>
           <Field label="Vendedor"><input className={inputCls} value={vendedor} onChange={e => setVendedor(e.target.value)} /></Field>
         </div>
+        {!isEditing && (
+          <Field label="Plazo de pago de la factura (días)">
+            <input type="number" min="0" step="1" className={inputCls + ' max-w-[140px]'} value={plazoPagoDias} onChange={e => setPlazoPagoDias(e.target.value)} />
+            <div className="text-xs text-gray-400 mt-1">Define el vencimiento de la factura que se genera con esta venta (fecha de la venta + este plazo). Se puede corregir después desde Cobranzas → Facturas.</div>
+          </Field>
+        )}
 
         <div className="mt-2">
           <div className="text-xs font-medium text-gray-600 mb-1">Productos (hasta {MAX_ITEMS})</div>

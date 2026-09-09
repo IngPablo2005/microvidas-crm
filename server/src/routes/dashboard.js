@@ -78,7 +78,11 @@ router.get('/', async (req, res) => {
   const cobradoMes = (await db.prepare(`SELECT COALESCE(SUM(importe),0) v FROM collections WHERE strftime('%Y-%m', fecha) = ? AND moneda = 'USD'`).get(mesActual)).v;
   const cobradoAnio = (await db.prepare(`SELECT COALESCE(SUM(importe),0) v FROM collections WHERE strftime('%Y', fecha) = ? AND moneda = 'USD'`).get(anioActual)).v;
   const cuentasACobrar = (await db.prepare(`SELECT COALESCE(SUM(saldo),0) v FROM invoices WHERE saldo > 0`).get()).v;
-  const vencido = (await db.prepare(`SELECT COALESCE(SUM(saldo),0) v FROM invoices WHERE estado = 'Vencida' AND saldo > 0`).get()).v;
+  // "Vencida" se calcula acá comparando fecha_vencimiento con hoy (no se guarda
+  // como tal en la base, ver estadoFactura en helpers.js) para que una factura
+  // no aparezca vencida antes de que se cumpla el plazo, ni al revés se quede
+  // marcada vencida en la base si después se le extiende el vencimiento.
+  const vencido = (await db.prepare(`SELECT COALESCE(SUM(saldo),0) v FROM invoices WHERE saldo > 0 AND fecha_vencimiento < ?`).get(t)).v;
   const proximosVencimientos = (await db.prepare(`SELECT COALESCE(SUM(saldo),0) v FROM invoices WHERE saldo > 0 AND fecha_vencimiento BETWEEN ? AND date(?, '+7 days')`).get(t, t)).v;
 
   res.json({
@@ -131,8 +135,8 @@ router.get('/alerts', async (req, res) => {
   const deudaVencida = await db.prepare(`
     SELECT c.id, c.razon_social, SUM(i.saldo) deuda, MIN(i.fecha_vencimiento) vto_antiguo
     FROM invoices i JOIN clients c ON c.id = i.client_id
-    WHERE i.estado = 'Vencida' AND i.saldo > 0 GROUP BY c.id
-  `).all();
+    WHERE i.saldo > 0 AND i.fecha_vencimiento < ? GROUP BY c.id
+  `).all(t);
   for (const d of deudaVencida) {
     const diasAtraso = Math.floor((Date.now() - new Date(d.vto_antiguo)) / 86400000);
     alerts.push({ tipo: 'Cliente con deuda vencida', severidad: 'alta', mensaje: `${d.razon_social} — Deuda vencida: USD ${d.deuda.toFixed(2)} (vencimiento más antiguo: ${diasAtraso} días)`, client_id: d.id, ref: 'clients', ref_id: d.id });
